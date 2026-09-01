@@ -1,0 +1,51 @@
+export const Config = {
+  APP_NAME: 'Goftegoo',
+  APP_NAME_FA: 'گفتگو',
+  APP_VERSION: '0.0.1',
+
+  API: {
+    BASE_URL: 'http://192.168.1.3:3001',
+    WS_URL: 'ws://192.168.1.3:3001/ws',
+    TIMEOUT: 30000,
+    RETRY_ATTEMPTS: 3,
+    RETRY_DELAY: 1000,
+  },
+
+  STORAGE: {
+    DB_NAME: 'goftgoo.db',
+    DB_VERSION: 1,
+    MAX_CONVERSATIONS: 500,
+    MESSAGES_PAGE_SIZE: 50,
+    MAX_MEDIA_SIZE_MB: 100,
+    CACHE_MAX_AGE_MS: 24 * 60 * 60 * 1000,
+  },
+
+  NEARBY: {
+    SCAN_TIMEOUT_MS: 60000,
+    CONNECTION_TIMEOUT_MS: 15000,
+    MAX_NEARBY_USERS: 50,
+    ADVERTISEMENT_INTERVAL_MS: 1000,
+  },
+
+  MESSAGING: {
+    MAX_TEXT_LENGTH: 4000,
+    MAX_FILE_SIZE_MB: 100,
+    VOICE_MAX_DURATION_S: 300,
+    VOICE_SAMPLE_RATE: 44100,
+    MAX_REACTIONS_PER_MESSAGE: 10,
+    OFFLINE_QUEUE_MAX_RETRIES: 5,
+    OFFLINE_QUEUE_RETRY_DELAY_MS: 5000,
+  },
+
+  TRANSLATION: {
+    DEFAULT_SOURCE: 'auto',
+    SUPPORTED_LANGUAGES: ['fa', 'ps', 'en', 'ar', 'ur'] as const,
+    CACHE_MAX_ENTRIES: 1000,
+  },
+
+  AI: {
+    PROVIDER: 'openai' as const,
+    MAX_TOKENS: 2048,
+    TEMPERATURE: 0.7,
+  },
+} as const;
