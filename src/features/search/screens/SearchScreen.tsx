@@ -1,4 +1,4 @@
-import React, {useState, useCallback} from 'react';
+import React, {useState, useCallback, useEffect} from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import {
 import {useAuthStore} from '../../../store/authStore';
 import {Config} from '../../../core/constants/config';
 
+const API = Config.API.BASE_URL;
+
 interface SearchResult {
   id: string;
   public_user_id: string;
@@ -22,6 +24,8 @@ interface SearchResult {
   avatar_url: string | null;
   bio: string | null;
   is_online: number;
+  friendship_status?: string;
+  friendship_request_id?: string;
 }
 
 export function SearchScreen({navigation}: any) {
@@ -29,8 +33,11 @@ export function SearchScreen({navigation}: any) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [addingFriend, setAddingFriend] = useState<string | null>(null);
   const user = useAuthStore(s => s.user);
   const token = useAuthStore(s => s.tokens?.accessToken);
+
+  const headers = token ? {Authorization: `Bearer ${token}`} : {};
 
   const search = useCallback(async (q: string) => {
     if (!q.trim() || !token) return;
@@ -38,12 +45,25 @@ export function SearchScreen({navigation}: any) {
     setSearched(true);
     try {
       const res = await fetch(
-        `${Config.API.BASE_URL}/api/users/search?q=${encodeURIComponent(q.trim())}`,
-        {headers: {Authorization: `Bearer ${token}`}},
+        `${API}/api/users/search?q=${encodeURIComponent(q.trim())}`,
+        {headers},
       );
       const data = await res.json();
       if (data.success) {
-        setResults(data.data.users || []);
+        const users = data.data.users || [];
+        // Fetch friendship status for each user
+        const withStatus = await Promise.all(
+          users.map(async (u: SearchResult) => {
+            try {
+              const sr = await fetch(`${API}/api/friends/status/${u.id}`, {headers});
+              const sd = await sr.json();
+              return {...u, friendship_status: sd.data?.status, friendship_request_id: sd.data?.requestId};
+            } catch {
+              return {...u, friendship_status: 'none'};
+            }
+          })
+        );
+        setResults(withStatus);
       }
     } catch (error) {
       console.error('Search error:', error);
@@ -52,26 +72,44 @@ export function SearchScreen({navigation}: any) {
     }
   }, [token]);
 
+  const sendFriendRequest = async (targetUser: SearchResult) => {
+    if (!token) return;
+    setAddingFriend(targetUser.id);
+    try {
+      const res = await fetch(`${API}/api/friends/request`, {
+        method: 'POST',
+        headers: {...headers, 'Content-Type': 'application/json'},
+        body: JSON.stringify({userId: targetUser.id}),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResults(prev => prev.map(u =>
+          u.id === targetUser.id
+            ? {...u, friendship_status: data.data.status, friendship_request_id: data.data.requestId}
+            : u
+        ));
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send friend request');
+    } finally {
+      setAddingFriend(null);
+    }
+  };
+
   const startChat = async (otherUser: SearchResult) => {
     if (!token) return;
     try {
-      const res = await fetch(`${Config.API.BASE_URL}/api/conversations`, {
+      const res = await fetch(`${API}/api/conversations`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: {...headers, 'Content-Type': 'application/json'},
         body: JSON.stringify({type: 'direct', participantIds: [otherUser.id]}),
       });
       const data = await res.json();
       if (data.success) {
-        navigation.navigate('ChatsTab', {
-          screen: 'Chat',
-          params: {
-            conversationId: data.data.conversationId,
-            participantName: otherUser.display_name,
-            participantAvatar: otherUser.avatar_url,
-          },
+        navigation.navigate('Chat', {
+          conversationId: data.data.conversationId,
+          participantName: otherUser.display_name,
+          participantAvatar: otherUser.avatar_url,
         });
       }
     } catch (error) {
@@ -80,18 +118,18 @@ export function SearchScreen({navigation}: any) {
   };
 
   const viewProfile = (userId: string) => {
-    // TODO: Navigate to user profile screen
-    Alert.alert('Profile', `User ID: ${userId}`);
+    navigation.navigate('UserProfile', {userId});
   };
 
   const renderResult = ({item}: {item: SearchResult}) => {
     const isMe = item.id === user?.id;
+    const fs = item.friendship_status || 'none';
     return (
       <View style={styles.resultItem}>
-        <View style={styles.avatar}>
+        <TouchableOpacity style={styles.avatar} onPress={() => viewProfile(item.id)}>
           <Text style={styles.avatarText}>{item.display_name?.[0] || '?'}</Text>
           {item.is_online === 1 && <View style={styles.onlineDot} />}
-        </View>
+        </TouchableOpacity>
         <View style={styles.resultInfo}>
           <Text style={styles.resultName}>{item.display_name}</Text>
           <Text style={styles.resultUsername}>@{item.username}</Text>
@@ -103,6 +141,31 @@ export function SearchScreen({navigation}: any) {
             <TouchableOpacity style={styles.msgBtn} onPress={() => startChat(item)}>
               <Text style={styles.msgBtnText}>Message</Text>
             </TouchableOpacity>
+            {fs === 'none' && (
+              <TouchableOpacity
+                style={styles.friendBtn}
+                onPress={() => sendFriendRequest(item)}
+                disabled={addingFriend === item.id}>
+                <Text style={styles.friendBtnText}>
+                  {addingFriend === item.id ? '...' : 'Add Friend'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {fs === 'request_sent' && (
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingText}>Request Sent</Text>
+              </View>
+            )}
+            {fs === 'request_received' && (
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingText}>Has Request</Text>
+              </View>
+            )}
+            {fs === 'friends' && (
+              <View style={styles.friendsBadge}>
+                <Text style={styles.friendsText}>Friends</Text>
+              </View>
+            )}
             <TouchableOpacity style={styles.profileBtn} onPress={() => viewProfile(item.id)}>
               <Text style={styles.profileBtnText}>Profile</Text>
             </TouchableOpacity>
@@ -223,14 +286,35 @@ const styles = StyleSheet.create({
   resultUsername: {fontSize: 13, color: '#6366f1', marginTop: 1},
   resultId: {fontSize: 11, color: '#999', marginTop: 1},
   resultBio: {fontSize: 12, color: '#666', marginTop: 2},
-  resultActions: {gap: 6},
+  resultActions: {gap: 6, alignItems: 'flex-end'},
   msgBtn: {
     backgroundColor: '#6366f1',
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 8,
   },
-  msgBtnText: {color: '#fff', fontSize: 13, fontWeight: '600'},
+  msgBtnText: {color: '#fff', fontSize: 12, fontWeight: '600'},
+  friendBtn: {
+    backgroundColor: '#22c55e',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  friendBtnText: {color: '#fff', fontSize: 12, fontWeight: '600'},
+  pendingBadge: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  pendingText: {color: '#d97706', fontSize: 11, fontWeight: '600'},
+  friendsBadge: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  friendsText: {color: '#16a34a', fontSize: 11, fontWeight: '600'},
   profileBtn: {
     borderWidth: 1,
     borderColor: '#6366f1',
@@ -238,7 +322,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
   },
-  profileBtnText: {color: '#6366f1', fontSize: 13, fontWeight: '600'},
+  profileBtnText: {color: '#6366f1', fontSize: 12, fontWeight: '600'},
   emptyContainer: {flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 100},
   emptyIcon: {fontSize: 48, marginBottom: 12},
   emptyText: {fontSize: 18, fontWeight: '600', color: '#333'},

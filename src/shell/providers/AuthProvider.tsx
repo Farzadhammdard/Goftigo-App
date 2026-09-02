@@ -15,7 +15,7 @@ const AuthContext = createContext<AuthContextValue>({
 });
 
 export function AuthProvider({children}: {children: React.ReactNode}) {
-  const {isAuthenticated, isLoading, isInitialized, tokens, setInitialized} =
+  const {isAuthenticated, isLoading, isInitialized, tokens, restoreSession} =
     useAuthStore();
   const [ready, setReady] = useState(false);
 
@@ -35,19 +35,16 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
   useEffect(() => {
     async function init() {
       try {
-        // TODO: Check secure storage for tokens
-        // TODO: Validate token expiry
-        // TODO: Load user profile
-        setInitialized(true);
+        await restoreSession();
       } catch (error) {
         console.error('Auth initialization failed:', error);
-        setInitialized(true);
+        useAuthStore.getState().setInitialized(true);
       } finally {
         setReady(true);
       }
     }
     init();
-  }, [setInitialized]);
+  }, []);
 
   return (
     <AuthContext.Provider

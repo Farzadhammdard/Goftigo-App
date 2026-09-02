@@ -90,7 +90,7 @@ router.post('/:id/like', mobileAuthMiddleware, async (req: MobileAuthRequest, re
     const db = await getDb();
     const userId = req.user!.id;
 
-    const post = queryOne(db, 'SELECT id FROM posts WHERE id = ? AND status = ?', [req.params.id, 'active']);
+    const post = queryOne(db, 'SELECT id FROM posts WHERE id = ?', [req.params.id]);
     if (!post) {
       res.status(404).json({success: false, error: {code: 'NOT_FOUND', message: 'Post not found'}});
       return;
@@ -234,7 +234,7 @@ router.post('/:id/comments', mobileAuthMiddleware, async (req: MobileAuthRequest
       return;
     }
 
-    const post = queryOne(db, 'SELECT id FROM posts WHERE id = ? AND status = ?', [req.params.id, 'active']);
+    const post = queryOne(db, 'SELECT id FROM posts WHERE id = ?', [req.params.id]);
     if (!post) {
       res.status(404).json({success: false, error: {code: 'NOT_FOUND', message: 'Post not found'}});
       return;

@@ -1,5 +1,5 @@
 import React, {useEffect, useState, useCallback} from 'react';
-import {View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator} from 'react-native';
+import {View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, TextInput, Alert} from 'react-native';
 import {Config} from '../../core/constants/config';
 import {useAuthStore} from '../../store/authStore';
 import {wsService} from '../../core/services/WebSocketService';
@@ -150,7 +150,7 @@ function ChatsScreen({navigation}: any) {
   );
 }
 
-function NearbyScreen() {
+function NearbyScreen({navigation}: any) {
   const [friends, setFriends] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>({received: [], sent: []} as any);
   const [tab, setTab] = useState<'friends' | 'requests'>('friends');
@@ -191,9 +191,38 @@ function NearbyScreen() {
     load();
   };
 
+  const startChat = async (friend: any) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API}/api/conversations`, {
+        method: 'POST',
+        headers: {...headers, 'Content-Type': 'application/json'},
+        body: JSON.stringify({type: 'direct', participantIds: [friend.id]}),
+      });
+      const data = await res.json();
+      if (data.success) {
+        navigation.navigate('ChatsTab', {
+          screen: 'Chat',
+          params: {
+            conversationId: data.data.conversationId,
+            participantName: friend.display_name,
+            participantAvatar: friend.avatar_url,
+          },
+        });
+      }
+    } catch (e) {
+      console.error('Start chat error:', e);
+    }
+  };
+
   return (
     <View style={s.container}>
-      <View style={s.header}><Text style={s.headerTitle}>Nearby</Text></View>
+      <View style={s.header}>
+        <Text style={s.headerTitle}>Friends</Text>
+        <TouchableOpacity style={s.searchBtn} onPress={() => navigation.navigate('ChatsTab', {screen: 'GlobalSearch'})}>
+          <Text style={s.searchBtnText}>🔍</Text>
+        </TouchableOpacity>
+      </View>
       <View style={s.tabRow}>
         <TouchableOpacity style={[s.tabBtn, tab === 'friends' && s.tabBtnActive]} onPress={() => setTab('friends')}>
           <Text style={[s.tabText, tab === 'friends' && s.tabTextActive]}>Friends ({friends.length})</Text>
@@ -215,14 +244,17 @@ function NearbyScreen() {
           </View>
         ) : (
           <FlatList data={friends} keyExtractor={item => item.id} renderItem={({item}) => (
-            <View style={s.chatItem}>
+            <TouchableOpacity style={s.chatItem} onPress={() => startChat(item)}>
               <View style={s.avatar}><Text style={s.avatarText}>{(item.display_name || '?')[0]}</Text></View>
               <View style={s.chatInfo}>
                 <Text style={s.chatName}>{item.display_name}</Text>
                 <Text style={s.chatLast}>@{item.username}</Text>
               </View>
-              {item.is_online === 1 && <View style={s.onlineDot}/>}
-            </View>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                {item.is_online === 1 && <View style={s.onlineDot}/>}
+                <Text style={{color: '#6366f1', fontSize: 18}}>›</Text>
+              </View>
+            </TouchableOpacity>
           )} />
         )
       ) : (
@@ -257,21 +289,30 @@ function NearbyScreen() {
 
 function SocialScreen() {
   const [posts, setPosts] = useState<any[]>([]);
+  const [myPosts, setMyPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newCaption, setNewCaption] = useState('');
   const [posting, setPosting] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
+  const [expandedPost, setExpandedPost] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [postComments, setPostComments] = useState<Record<string, any[]>>({});
+  const [socialTab, setSocialTab] = useState<'feed' | 'my'>('feed');
   const user = useAuthStore(s => s.user);
   const token = useAuthStore(s => s.tokens?.accessToken);
 
   const load = useCallback(async () => {
     try {
       if (!token) return;
-      const r = await fetch(`${API}/api/posts/feed`, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      const data = await r.json();
-      setPosts(data.data?.posts || []);
+      const [feedRes, myRes] = await Promise.all([
+        fetch(`${API}/api/posts/feed`, {headers: {Authorization: `Bearer ${token}`}}),
+        fetch(`${API}/api/posts/my`, {headers: {Authorization: `Bearer ${token}`}}),
+      ]);
+      const feedData = await feedRes.json();
+      const myData = await myRes.json();
+      setPosts(feedData.data?.posts || []);
+      setMyPosts(myData.data?.posts || []);
     } catch (e) {
       console.error('Load posts error:', e);
     } finally {
@@ -328,6 +369,50 @@ function SocialScreen() {
     }
   };
 
+  const toggleComments = async (postId: string) => {
+    if (expandedPost === postId) {
+      setExpandedPost(null);
+      return;
+    }
+    setExpandedPost(postId);
+    if (!postComments[postId]) {
+      try {
+        const r = await fetch(`${API}/api/posts/${postId}`, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        const data = await r.json();
+        if (data.success) {
+          setPostComments(prev => ({...prev, [postId]: data.data.comments || []}));
+        }
+      } catch (e) {}
+    }
+  };
+
+  const submitComment = async (postId: string) => {
+    if (!commentText.trim() || !token || submittingComment) return;
+    setSubmittingComment(true);
+    try {
+      const r = await fetch(`${API}/api/posts/${postId}/comments`, {
+        method: 'POST',
+        headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
+        body: JSON.stringify({content: commentText.trim()}),
+      });
+      const data = await r.json();
+      if (data.success) {
+        setPostComments(prev => ({
+          ...prev,
+          [postId]: [...(prev[postId] || []), data.data.comment],
+        }));
+        setCommentText('');
+        setPosts(prev => prev.map(p => p.id === postId ? {...p, comment_count: (p.comment_count || 0) + 1} : p));
+      }
+    } catch (e) {
+      console.error('Comment error:', e);
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
   return (
     <View style={s.container}>
       <View style={s.header}>
@@ -366,9 +451,18 @@ function SocialScreen() {
           <Text style={s.composeNote}>Your post will be visible after admin approval</Text>
         </View>
       )}
+      <View style={s.tabRow}>
+        <TouchableOpacity style={[s.tabBtn, socialTab === 'feed' && s.tabBtnActive]} onPress={() => setSocialTab('feed')}>
+          <Text style={[s.tabText, socialTab === 'feed' && s.tabTextActive]}>Feed</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[s.tabBtn, socialTab === 'my' && s.tabBtnActive]} onPress={() => setSocialTab('my')}>
+          <Text style={[s.tabText, socialTab === 'my' && s.tabTextActive]}>My Posts ({myPosts.length})</Text>
+        </TouchableOpacity>
+      </View>
       {loading ? (
         <View style={s.empty}><ActivityIndicator size="large" color="#6366f1" /></View>
-      ) : posts.length === 0 ? (
+      ) : socialTab === 'feed' ? (
+        posts.length === 0 ? (
         <View style={s.empty}>
           <Text style={s.emptyIcon}>📰</Text>
           <Text style={s.emptyText}>No posts yet</Text>
@@ -394,9 +488,61 @@ function SocialScreen() {
                     {item.isLiked ? '❤️' : '🤍'} {item.like_count || 0}
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={s.actionBtn}>
+                <TouchableOpacity style={s.actionBtn} onPress={() => toggleComments(item.id)}>
                   <Text style={s.actionText}>💬 {item.comment_count || 0}</Text>
                 </TouchableOpacity>
+              </View>
+              {expandedPost === item.id && (
+                <View style={s.commentSection}>
+                  {(postComments[item.id] || []).map((c: any) => (
+                    <View key={c.id} style={s.commentItem}>
+                      <Text style={s.commentAuthor}>{c.author_name || c.author_username}</Text>
+                      <Text style={s.commentContent}>{c.content}</Text>
+                    </View>
+                  ))}
+                  <View style={s.commentInputRow}>
+                    <TextInput
+                      style={s.commentInput}
+                      placeholder="Write a comment..."
+                      placeholderTextColor="#999"
+                      value={commentText}
+                      onChangeText={setCommentText}
+                    />
+                    <TouchableOpacity
+                      style={[s.commentSubmitBtn, (!commentText.trim() || submittingComment) && {opacity: 0.5}]}
+                      onPress={() => submitComment(item.id)}
+                      disabled={!commentText.trim() || submittingComment}>
+                      <Text style={s.commentSubmitText}>{submittingComment ? '...' : 'Send'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+        />
+      ) : myPosts.length === 0 ? (
+        <View style={s.empty}>
+          <Text style={s.emptyIcon}>📝</Text>
+          <Text style={s.emptyText}>No posts yet</Text>
+          <Text style={s.emptySub}>Create your first post!</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={myPosts}
+          keyExtractor={(item) => item.id}
+          renderItem={({item}) => (
+            <View style={s.postCard}>
+              <View style={s.postHeader}>
+                <View style={s.postAvatar}><Text style={s.postAvatarText}>{(item.author_name || '?')[0]}</Text></View>
+                <View>
+                  <Text style={s.postAuthor}>{item.author_name || item.author_username}</Text>
+                  <Text style={s.postTime}>{formatRelativeTime(item.created_at)}</Text>
+                </View>
+              </View>
+              {item.caption ? <Text style={s.postCaption}>{item.caption}</Text> : null}
+              <View style={s.postActions}>
+                <Text style={s.actionText}>❤️ {item.like_count || 0}</Text>
+                <Text style={s.actionText}>💬 {item.comment_count || 0}</Text>
               </View>
             </View>
           )}
@@ -419,7 +565,7 @@ function CallsScreen() {
   );
 }
 
-function ProfileScreen() {
+function ProfileScreen({navigation}: any) {
   const [user, setUser] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState('');
@@ -464,7 +610,12 @@ function ProfileScreen() {
 
   return (
     <View style={s.container}>
-      <View style={s.header}><Text style={s.headerTitle}>Profile</Text></View>
+      <View style={s.header}>
+        <Text style={s.headerTitle}>Profile</Text>
+        <TouchableOpacity style={s.searchBtn} onPress={() => navigation.navigate('Notifications')}>
+          <Text style={s.searchBtnText}>🔔</Text>
+        </TouchableOpacity>
+      </View>
       <View style={s.profileCard}>
         <View style={s.profileAvatar}><Text style={s.profileAvatarText}>{user?.displayName?.[0] || '?'}</Text></View>
         {editing ? (
@@ -545,6 +696,24 @@ const s = StyleSheet.create({
   composePostBtnDisabled: {opacity: 0.5},
   composePostBtnText: {color: '#fff', fontSize: 14, fontWeight: '600'},
   composeNote: {fontSize: 11, color: '#999', marginTop: 8, fontStyle: 'italic'},
+  // Comments
+  commentSection: {borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10, marginTop: 10},
+  commentItem: {flexDirection: 'row', marginBottom: 6, gap: 6},
+  commentAuthor: {fontSize: 13, fontWeight: '700', color: '#333'},
+  commentContent: {fontSize: 13, color: '#555', flex: 1},
+  commentInputRow: {flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6},
+  commentInput: {flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 13},
+  commentSubmitBtn: {backgroundColor: '#6366f1', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6},
+  commentSubmitText: {color: '#fff', fontSize: 12, fontWeight: '600'},
+  // Status badges
+  statusBadge: {marginLeft: 8, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10},
+  statusActive: {backgroundColor: '#dcfce7'},
+  statusPending: {backgroundColor: '#fef3c7'},
+  statusRejected: {backgroundColor: '#fee2e2'},
+  statusText: {fontSize: 11, fontWeight: '600'},
+  statusTextActive: {color: '#16a34a'},
+  statusTextPending: {color: '#d97706'},
+  statusTextRejected: {color: '#dc2626'},
   // Tab row (Nearby/Friends)
   tabRow: {flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee'},
   tabBtn: {flex: 1, paddingVertical: 12, alignItems: 'center'},

@@ -4,7 +4,8 @@ import {Text, View, StyleSheet} from 'react-native';
 import type {MainTabParamList} from './types';
 import {useTheme} from '../providers/ThemeProvider';
 import {ChatNavigator} from './ChatNavigator';
-import {NearbyScreen, SocialScreen, CallsScreen, ProfileScreen} from '../../features/main/MainScreens';
+import {ProfileNavigator} from './ProfileNavigator';
+import {NearbyScreen, SocialScreen, CallsScreen} from '../../features/main/MainScreens';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -49,7 +50,7 @@ export function MainTabNavigator() {
       <Tab.Screen name="NearbyTab" component={NearbyScreen} options={{tabBarLabel: 'Nearby'}} />
       <Tab.Screen name="SocialTab" component={SocialScreen} options={{tabBarLabel: 'Social'}} />
       <Tab.Screen name="CallsTab" component={CallsScreen} options={{tabBarLabel: 'Calls'}} />
-      <Tab.Screen name="ProfileTab" component={ProfileScreen} options={{tabBarLabel: 'Profile'}} />
+      <Tab.Screen name="ProfileTab" component={ProfileNavigator} options={{tabBarLabel: 'Profile'}} />
     </Tab.Navigator>
   );
 }

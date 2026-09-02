@@ -18,6 +18,7 @@ export type ChatStackParamList = {
     participantAvatar?: string;
   };
   GlobalSearch: undefined;
+  UserProfile: {userId: string};
 };
 
 export type MainTabParamList = {

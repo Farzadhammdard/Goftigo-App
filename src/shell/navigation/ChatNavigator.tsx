@@ -4,6 +4,7 @@ import type {ChatStackParamList} from './types';
 import {ChatsScreen} from '../../features/main/MainScreens';
 import {ChatScreen} from '../../features/chat/screens/ChatScreen';
 import {SearchScreen} from '../../features/search/screens/SearchScreen';
+import {UserProfileScreen} from '../../features/profile/screens/UserProfileScreen';
 
 const Stack = createNativeStackNavigator<ChatStackParamList>();
 
@@ -19,6 +20,11 @@ export function ChatNavigator() {
       <Stack.Screen
         name="GlobalSearch"
         component={SearchScreen}
+        options={{animation: 'slide_from_right'}}
+      />
+      <Stack.Screen
+        name="UserProfile"
+        component={UserProfileScreen}
         options={{animation: 'slide_from_right'}}
       />
     </Stack.Navigator>
