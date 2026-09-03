@@ -22,6 +22,7 @@
         "backgroundColor": "#6366f1"
       },
       "package": "com.goftgoo.app",
+      "usesCleartextTraffic": true,
       "permissions": [
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
