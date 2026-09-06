@@ -7,9 +7,15 @@ import {getDb} from './db/connection';
 import {queryOne, queryAll, runStatement} from './db/helpers';
 import {now} from './utils/auth';
 
-interface AuthenticatedSocket extends WebSocket {
+interface AuthenticatedSocket {
   userId?: string;
   isAlive?: boolean;
+  readyState: number;
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+  on(event: string, listener: (...args: any[]) => void): void;
+  ping(): void;
+  terminate(): void;
 }
 
 const clients = new Map<string, AuthenticatedSocket[]>();
@@ -17,7 +23,7 @@ const clients = new Map<string, AuthenticatedSocket[]>();
 export function setupWebSocket(server: HttpServer): void {
   const wss = new WebSocketServer({server, path: '/ws'});
 
-  wss.on('connection', (ws: AuthenticatedSocket, req) => {
+  wss.on('connection', (ws: AuthenticatedSocket, req: any) => {
     const url = new URL(req.url || '', `http://${req.headers.host}`);
     const token = url.searchParams.get('token');
 

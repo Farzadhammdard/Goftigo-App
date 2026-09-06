@@ -1,5 +1,6 @@
 import React from 'react';
 import {StatusBar} from 'react-native';
+import {useTheme} from './src/shell/providers/ThemeProvider';
 import {NavigationContainer} from '@react-navigation/native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
@@ -9,6 +10,10 @@ import {TransportProvider} from './src/shell/providers/TransportProvider';
 import {RootNavigator} from './src/shell/navigation/RootNavigator';
 
 function App(): React.JSX.Element {
+  const ThemedStatusBar = () => {
+    const {isDark, colors} = useTheme();
+    return <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />;
+  };
   return (
     <GestureHandlerRootView style={{flex: 1}}>
       <SafeAreaProvider>
@@ -16,7 +21,7 @@ function App(): React.JSX.Element {
           <AuthProvider>
             <TransportProvider>
               <NavigationContainer>
-                <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+                <ThemedStatusBar />
                 <RootNavigator />
               </NavigationContainer>
             </TransportProvider>

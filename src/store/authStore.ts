@@ -1,6 +1,7 @@
 import {create} from 'zustand';
 import * as FileSystem from 'expo-file-system';
 import type {User, AuthTokens} from '../core/types/models';
+import {Config} from '../core/constants/config';
 
 const AUTH_FILE = FileSystem.documentDirectory + 'auth.json';
 
@@ -64,6 +65,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
+    const token = get().tokens?.accessToken;
+    if (token) {
+      fetch(`${Config.API.BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: {Authorization: `Bearer ${token}`},
+      }).catch(error => console.error('Logout request failed:', error));
+    }
     clearAuth();
     set({user: null, tokens: null, isAuthenticated: false, isLoading: false});
   },

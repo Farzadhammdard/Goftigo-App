@@ -79,6 +79,13 @@ class WebSocketService {
 
         this.emit('disconnected', {});
 
+        // 1008 = policy violation (invalid token) — don't retry, force logout
+        if (event.code === 1008) {
+          console.log('[WS] Auth failed — token invalid, forcing logout');
+          this.emit('auth_error', {});
+          return;
+        }
+
         if (event.code !== 1000 && this.token) {
           this.scheduleReconnect();
         }

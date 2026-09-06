@@ -8,6 +8,8 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
+    "noEmitOnError": false,
+    "noEmit": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -28,6 +30,5 @@
   "exclude": [
     "node_modules",
     "dist"
-  ],
-  "extends": "expo/tsconfig.base"
+  ]
 }

@@ -30,6 +30,22 @@ router.post('/', mobileAuthMiddleware, async (req: MobileAuthRequest, res: Respo
       return;
     }
 
+    // Check if blocked by any participant
+    const otherParticipants = queryAll(db,
+      'SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id != ?',
+      [conversationId, userId]
+    );
+    for (const other of otherParticipants) {
+      const isBlocked = queryOne(db,
+        'SELECT 1 FROM blocked_users WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)',
+        [userId, other.user_id, other.user_id, userId]
+      );
+      if (isBlocked) {
+        res.status(403).json({success: false, error: {code: 'BLOCKED', message: 'Cannot send message to this user'}});
+        return;
+      }
+    }
+
     const msgId = generateId();
     const seq = queryAll(db, 'SELECT sequence_number FROM messages WHERE conversation_id = ? ORDER BY sequence_number DESC LIMIT 1', [conversationId]);
     const nextSeq = seq.length > 0 ? (seq[0].sequence_number || 0) + 1 : 1;

@@ -386,6 +386,7 @@ router.post('/logout', mobileAuthMiddleware, async (req: MobileAuthRequest, res:
 
     runStatement(db, 'UPDATE users SET is_online = 0, last_seen_at = ? WHERE id = ?', [ts, req.user!.id]);
     runStatement(db, 'DELETE FROM refresh_tokens WHERE user_id = ?', [req.user!.id]);
+    saveDb();
 
     res.json({success: true, data: {message: 'Logged out'}});
   } catch (error) {

@@ -26,6 +26,8 @@ import mobilePostRoutes from './routes/mobile/posts';
 import mobileMediaRoutes from './routes/mobile/media';
 import mobileFriendRoutes from './routes/mobile/friends';
 import mobileNotificationRoutes from './routes/mobile/notifications';
+import mobileFollowRoutes from './routes/mobile/follows';
+import mobileSettingsRoutes from './routes/mobile/settings';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -56,6 +58,9 @@ app.use('/api/posts', mobilePostRoutes);
 app.use('/api/media', mobileMediaRoutes);
 app.use('/api/friends', mobileFriendRoutes);
 app.use('/api/notifications', mobileNotificationRoutes);
+app.use('/api/follows', mobileFollowRoutes);
+app.use('/api/settings', mobileSettingsRoutes);
+app.use('/api/account', mobileSettingsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -196,8 +201,8 @@ async function main() {
   await seedAdminContact();
   await seedTestUsers();
 
-  const server = app.listen(PORT, () => {
-    console.log(`Goftegoo Server running on http://localhost:${PORT}`);
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Goftegoo Server running on http://0.0.0.0:${PORT}`);
     console.log(`Admin API: http://localhost:${PORT}/api/admin`);
     console.log(`Mobile API: http://localhost:${PORT}/api`);
     console.log(`WebSocket: ws://localhost:${PORT}/ws`);

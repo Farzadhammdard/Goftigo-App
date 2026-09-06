@@ -61,6 +61,7 @@ export function RegisterScreen({navigation}: any) {
         useAuthStore.getState().login(data.data.user, {
           accessToken: data.data.accessToken,
           refreshToken: data.data.refreshToken,
+          expiresAt: Date.now() + 15 * 60 * 1000,
         });
       } else {
         Alert.alert('Registration Failed', data.error?.message || 'Registration failed');
@@ -141,10 +142,10 @@ export function RegisterScreen({navigation}: any) {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#f5f5f5'},
+  container: {flex: 1, backgroundColor: '#F5F7FA'},
   scrollContent: {flexGrow: 1},
   inner: {flex: 1, justifyContent: 'center', padding: 24},
-  title: {fontSize: 42, fontWeight: 'bold', textAlign: 'center', color: '#6366f1'},
+  title: {fontSize: 42, fontWeight: 'bold', textAlign: 'center', color: '#00E5D4'},
   subtitle: {fontSize: 16, textAlign: 'center', color: '#666', marginBottom: 40},
   form: {gap: 12},
   input: {
@@ -156,7 +157,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   button: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#00E5D4',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -164,5 +165,5 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {opacity: 0.6},
   buttonText: {color: '#fff', fontSize: 16, fontWeight: '600'},
-  link: {textAlign: 'center', color: '#6366f1', marginTop: 16, fontSize: 14},
+  link: {textAlign: 'center', color: '#00B8AA', marginTop: 16, fontSize: 14},
 });

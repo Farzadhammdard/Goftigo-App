@@ -4,7 +4,7 @@ import {api} from '../api/client';
 
 export function CreateUserPage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({phoneNumber: '+93', username: '', displayName: '', employeeId: ''});
+  const [form, setForm] = useState({phoneNumber: '+93', username: '', displayName: '', employeeId: '', password: ''});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -31,6 +31,12 @@ export function CreateUserPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Display Name *</label>
             <input value={form.displayName} onChange={e => setForm({...form, displayName: e.target.value})}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Initial Password *</label>
+            <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+              minLength={4} required />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Username *</label>

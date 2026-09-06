@@ -58,6 +58,27 @@ router.get('/', mobileAuthMiddleware, async (req: MobileAuthRequest, res: Respon
   }
 });
 
+// POST /api/conversations/saved — private conversation for personal notes
+router.post('/saved', mobileAuthMiddleware, async (req: MobileAuthRequest, res: Response) => {
+  try {
+    const db = await getDb();
+    const userId = req.user!.id;
+    const existing = queryOne(db, "SELECT id FROM conversations WHERE type = 'saved' AND name = ? LIMIT 1", [userId]) as any;
+    if (existing) {
+      res.json({success: true, data: {conversationId: existing.id, existing: true}});
+      return;
+    }
+    const ts = now();
+    const id = generateId();
+    runStatement(db, 'INSERT INTO conversations (id, type, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [id, 'saved', userId, ts, ts]);
+    runStatement(db, 'INSERT INTO conversation_participants (conversation_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)', [id, userId, 'member', ts]);
+    res.status(201).json({success: true, data: {conversationId: id, existing: false}});
+  } catch (error) {
+    console.error('Create saved conversation error:', error);
+    res.status(500).json({success: false, error: {code: 'INTERNAL', message: 'Failed to create saved messages'}});
+  }
+});
+
 // POST /api/conversations
 router.post('/', mobileAuthMiddleware, async (req: MobileAuthRequest, res: Response) => {
   try {
@@ -74,6 +95,17 @@ router.post('/', mobileAuthMiddleware, async (req: MobileAuthRequest, res: Respo
     // For direct conversations, check if one already exists
     if (type === 'direct' && participantIds.length === 1) {
       const otherId = participantIds[0];
+
+      // Check if blocked
+      const isBlocked = queryOne(db,
+        'SELECT 1 FROM blocked_users WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)',
+        [userId, otherId, otherId, userId]
+      );
+      if (isBlocked) {
+        res.status(403).json({success: false, error: {code: 'BLOCKED', message: 'Cannot create conversation with this user'}});
+        return;
+      }
+
       const existing = queryOne(db,
         `SELECT c.id FROM conversations c
          INNER JOIN conversation_participants cp1 ON c.id = cp1.conversation_id AND cp1.user_id = ?

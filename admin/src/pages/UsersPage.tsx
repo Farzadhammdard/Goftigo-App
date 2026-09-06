@@ -10,11 +10,11 @@ export function UsersPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = async (searchOverride = search) => {
     setLoading(true);
     try {
       const params: Record<string, string> = {page: String(page), pageSize: '20'};
-      if (search) params.search = search;
+      if (searchOverride) params.search = searchOverride;
       if (status) params.status = status;
       const result = await api.getUsers(params);
       setUsers(result.data);
@@ -25,7 +25,7 @@ export function UsersPage() {
 
   useEffect(() => { load(); }, [page, status]);
 
-  const handleSearch = (e: React.FormEvent) => { e.preventDefault(); setPage(1); load(); };
+  const handleSearch = (e: React.FormEvent) => { e.preventDefault(); setPage(1); load(search); };
 
   const handleStatusChange = async (userId: string, newStatus: string) => {
     if (!confirm(`Change user status to ${newStatus}?`)) return;

@@ -4,8 +4,8 @@ export const Config = {
   APP_VERSION: '0.0.1',
 
   API: {
-    BASE_URL: 'http://192.168.1.2:3001',
-    WS_URL: 'ws://192.168.1.2:3001/ws',
+    BASE_URL: 'http://192.168.1.5:3001',
+    WS_URL: 'ws://192.168.1.5:3001/ws',
     TIMEOUT: 30000,
     RETRY_ATTEMPTS: 3,
     RETRY_DELAY: 1000,

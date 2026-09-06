@@ -21,11 +21,21 @@ export type ChatStackParamList = {
   UserProfile: {userId: string};
 };
 
+export type ProfileStackParamList = {
+  ProfileMain: undefined;
+  PostsGrid: {userId: string; userName: string};
+  FollowersList: {userId: string; userName: string};
+  FollowingList: {userId: string; userName: string};
+  FriendsList: {userId: string; userName: string};
+  Notifications: undefined;
+};
+
 export type MainTabParamList = {
   ChatsTab: NavigatorScreenParams<ChatStackParamList>;
   NearbyTab: undefined;
   SocialTab: undefined;
-  CallsTab: undefined;
+  FriendsTab: undefined;
+  QuickAddTab: undefined;
   ProfileTab: undefined;
 };
 

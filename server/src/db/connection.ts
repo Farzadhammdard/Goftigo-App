@@ -5,6 +5,7 @@ import fs from 'fs';
 const DB_PATH = path.join(__dirname, '..', '..', 'data', 'goftgoo.db');
 
 let db: SqlJsDatabase | null = null;
+let dirty = false;
 
 export async function getDb(): Promise<SqlJsDatabase> {
   if (db) return db;
@@ -29,13 +30,24 @@ export async function getDb(): Promise<SqlJsDatabase> {
   return db;
 }
 
+export function markDirty(): void {
+  dirty = true;
+}
+
 export function saveDb(): void {
   if (db) {
     const data = db.export();
     const buffer = Buffer.from(data);
     fs.writeFileSync(DB_PATH, buffer);
+    dirty = false;
   }
 }
+
+setInterval(() => {
+  if (dirty && db) {
+    saveDb();
+  }
+}, 5000);
 
 export function closeDb(): void {
   if (db) {

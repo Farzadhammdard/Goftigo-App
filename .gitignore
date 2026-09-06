@@ -16,3 +16,4 @@ server/data/*.db-journal
 Thumbs.db
 .vscode/
 .idea/
+/android

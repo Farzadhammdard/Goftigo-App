@@ -17,7 +17,7 @@ export async function mobileAuthMiddleware(req: MobileAuthRequest, res: Response
 
   const token = authHeader.slice(7);
   try {
-    const payload = verifyToken(token) as {userId: string};
+    const payload = verifyToken(token) as unknown as {userId: string};
     const db = await getDb();
     const user = queryOne(db, 'SELECT * FROM users WHERE id = ? AND status = ?', [payload.userId, 'active']) as User | undefined;
 

@@ -12,9 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import {useAuthStore} from '../../../store/authStore';
-import {Config} from '../../../core/constants/config';
-
-const API = Config.API.BASE_URL;
+import {apiClient} from '../../../core/services/apiClient';
 
 interface SearchResult {
   id: string;
@@ -37,26 +35,21 @@ export function SearchScreen({navigation}: any) {
   const user = useAuthStore(s => s.user);
   const token = useAuthStore(s => s.tokens?.accessToken);
 
-  const headers = token ? {Authorization: `Bearer ${token}`} : {};
-
   const search = useCallback(async (q: string) => {
     if (!q.trim() || !token) return;
     setLoading(true);
     setSearched(true);
     try {
-      const res = await fetch(
-        `${API}/api/users/search?q=${encodeURIComponent(q.trim())}`,
-        {headers},
+      const data = await apiClient.get(
+        `/api/users/search?q=${encodeURIComponent(q.trim())}`,
       );
-      const data = await res.json();
       if (data.success) {
         const users = data.data.users || [];
         // Fetch friendship status for each user
         const withStatus = await Promise.all(
           users.map(async (u: SearchResult) => {
             try {
-              const sr = await fetch(`${API}/api/friends/status/${u.id}`, {headers});
-              const sd = await sr.json();
+              const sd = await apiClient.get(`/api/friends/status/${u.id}`);
               return {...u, friendship_status: sd.data?.status, friendship_request_id: sd.data?.requestId};
             } catch {
               return {...u, friendship_status: 'none'};
@@ -76,12 +69,9 @@ export function SearchScreen({navigation}: any) {
     if (!token) return;
     setAddingFriend(targetUser.id);
     try {
-      const res = await fetch(`${API}/api/friends/request`, {
-        method: 'POST',
-        headers: {...headers, 'Content-Type': 'application/json'},
-        body: JSON.stringify({userId: targetUser.id}),
+      const data = await apiClient.post('/api/friends/request', {
+        userId: targetUser.id,
       });
-      const data = await res.json();
       if (data.success) {
         setResults(prev => prev.map(u =>
           u.id === targetUser.id
@@ -99,12 +89,10 @@ export function SearchScreen({navigation}: any) {
   const startChat = async (otherUser: SearchResult) => {
     if (!token) return;
     try {
-      const res = await fetch(`${API}/api/conversations`, {
-        method: 'POST',
-        headers: {...headers, 'Content-Type': 'application/json'},
-        body: JSON.stringify({type: 'direct', participantIds: [otherUser.id]}),
+      const data = await apiClient.post('/api/conversations', {
+        type: 'direct',
+        participantIds: [otherUser.id],
       });
-      const data = await res.json();
       if (data.success) {
         navigation.navigate('Chat', {
           conversationId: data.data.conversationId,
@@ -202,7 +190,7 @@ export function SearchScreen({navigation}: any) {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6366f1" />
+          <ActivityIndicator size="large" color="#00E5D4" />
         </View>
       ) : (
         <FlatList
@@ -231,13 +219,13 @@ export function SearchScreen({navigation}: any) {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#f5f5f5'},
+  container: {flex: 1, backgroundColor: '#F5F7FA'},
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 8,
     paddingTop: 48,
-    backgroundColor: '#6366f1',
+    backgroundColor: '#00E5D4',
     gap: 8,
   },
   backBtn: {padding: 8},
@@ -264,7 +252,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#6366f1',
+    backgroundColor: '#00E5D4',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -283,12 +271,12 @@ const styles = StyleSheet.create({
   },
   resultInfo: {flex: 1},
   resultName: {fontSize: 16, fontWeight: '600', color: '#333'},
-  resultUsername: {fontSize: 13, color: '#6366f1', marginTop: 1},
+  resultUsername: {fontSize: 13, color: '#00B8AA', marginTop: 1},
   resultId: {fontSize: 11, color: '#999', marginTop: 1},
   resultBio: {fontSize: 12, color: '#666', marginTop: 2},
   resultActions: {gap: 6, alignItems: 'flex-end'},
   msgBtn: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#00E5D4',
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 8,
@@ -317,12 +305,12 @@ const styles = StyleSheet.create({
   friendsText: {color: '#16a34a', fontSize: 11, fontWeight: '600'},
   profileBtn: {
     borderWidth: 1,
-    borderColor: '#6366f1',
+    borderColor: '#00E5D4',
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 8,
   },
-  profileBtnText: {color: '#6366f1', fontSize: 12, fontWeight: '600'},
+  profileBtnText: {color: '#00B8AA', fontSize: 12, fontWeight: '600'},
   emptyContainer: {flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 100},
   emptyIcon: {fontSize: 48, marginBottom: 12},
   emptyText: {fontSize: 18, fontWeight: '600', color: '#333'},

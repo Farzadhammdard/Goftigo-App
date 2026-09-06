@@ -1,5 +1,6 @@
-import React, {createContext, useContext, useMemo} from 'react';
+import React, {createContext, useContext, useMemo, useEffect, useRef} from 'react';
 import {useColorScheme} from 'react-native';
+import {setThemeColors} from '../../core/theme/colors';
 import {Colors, type ThemeColors} from '../../core/constants/colors';
 import {useThemeStore, type ThemeMode} from '../../store/themeStore';
 
@@ -21,7 +22,8 @@ const ThemeContext = createContext<ThemeContextValue>({
 
 export function ThemeProvider({children}: {children: React.ReactNode}) {
   const systemColorScheme = useColorScheme();
-  const {mode, setMode, toggleTheme} = useThemeStore();
+  const {mode, setMode, toggleTheme, hydrate} = useThemeStore();
+  useEffect(() => { hydrate(); }, [hydrate]);
 
   const isDark = useMemo(() => {
     if (mode === 'system') {
@@ -29,6 +31,13 @@ export function ThemeProvider({children}: {children: React.ReactNode}) {
     }
     return mode === 'dark';
   }, [mode, systemColorScheme]);
+
+  const prevIsDark = useRef(isDark);
+  if (prevIsDark.current !== isDark) {
+    setThemeColors(isDark);
+    prevIsDark.current = isDark;
+  }
+  setThemeColors(isDark);
 
   const colors = useMemo(
     () => (isDark ? Colors.dark : Colors.light) as ThemeColors,

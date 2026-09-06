@@ -1,10 +1,8 @@
 import React, {useEffect, useState, useCallback} from 'react';
 import {View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator} from 'react-native';
-import {useAuthStore} from '../../../store/authStore';
-import {Config} from '../../../core/constants/config';
 import {formatRelativeTime} from '../../../core/utils/formatters';
-
-const API = Config.API.BASE_URL;
+import {apiClient} from '../../../core/services/apiClient';
+import {wsService} from '../../../core/services/WebSocketService';
 
 interface Notification {
   id: string;
@@ -33,13 +31,10 @@ export function NotificationsScreen({navigation}: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [unread, setUnread] = useState(0);
-  const token = useAuthStore(s => s.tokens?.accessToken);
-  const headers = token ? {Authorization: `Bearer ${token}`} : {};
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/api/notifications`, {headers});
-      const data = await res.json();
+      const data = await apiClient.get('/api/notifications');
       if (data.success) {
         setNotifications(data.data.notifications || []);
         setUnread(data.data.unread || 0);
@@ -50,13 +45,24 @@ export function NotificationsScreen({navigation}: any) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    const handleNotification = (event: any) => {
+      if (event?.notification) {
+        setNotifications(prev => [event.notification, ...prev]);
+        setUnread(prev => prev + 1);
+      }
+    };
+    wsService.on('notification', handleNotification);
+    return () => wsService.off('notification', handleNotification);
+  }, []);
+
   const markAllRead = async () => {
     try {
-      await fetch(`${API}/api/notifications/read-all`, {method: 'POST', headers});
+      await apiClient.post('/api/notifications/read-all');
       setNotifications(prev => prev.map(n => ({...n, is_read: 1})));
       setUnread(0);
     } catch {}
@@ -65,7 +71,7 @@ export function NotificationsScreen({navigation}: any) {
   const handlePress = async (notif: Notification) => {
     if (!notif.is_read) {
       try {
-        await fetch(`${API}/api/notifications/${notif.id}/read`, {method: 'POST', headers});
+        await apiClient.post(`/api/notifications/${notif.id}/read`);
         setNotifications(prev => prev.map(n => n.id === notif.id ? {...n, is_read: 1} : n));
         setUnread(prev => Math.max(0, prev - 1));
       } catch {}
@@ -108,7 +114,7 @@ export function NotificationsScreen({navigation}: any) {
         )}
       </View>
       {loading ? (
-        <View style={s.center}><ActivityIndicator size="large" color="#6366f1" /></View>
+        <View style={s.center}><ActivityIndicator size="large" color="#00E5D4" /></View>
       ) : notifications.length === 0 ? (
         <View style={s.center}>
           <Text style={s.emptyIcon}>🔔</Text>
@@ -127,8 +133,8 @@ export function NotificationsScreen({navigation}: any) {
 }
 
 const s = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#f5f5f5'},
-  header: {backgroundColor: '#6366f1', paddingTop: 50, paddingBottom: 16, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
+  container: {flex: 1, backgroundColor: '#F5F7FA'},
+  header: {backgroundColor: '#00B8AA', paddingTop: 50, paddingBottom: 16, paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
   headerTitle: {fontSize: 24, fontWeight: 'bold', color: '#fff'},
   markAllText: {color: '#fff', fontSize: 14, opacity: 0.9},
   center: {flex: 1, justifyContent: 'center', alignItems: 'center'},
@@ -142,5 +148,5 @@ const s = StyleSheet.create({
   notifTitleBold: {fontWeight: '700'},
   notifBody: {fontSize: 13, color: '#666', marginTop: 2},
   notifTime: {fontSize: 11, color: '#999', marginTop: 4},
-  unreadDot: {width: 10, height: 10, borderRadius: 5, backgroundColor: '#6366f1', marginLeft: 8},
+  unreadDot: {width: 10, height: 10, borderRadius: 5, backgroundColor: '#00E5D4', marginLeft: 8},
 });

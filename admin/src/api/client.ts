@@ -135,6 +135,10 @@ class ApiClient {
     return this.request<any>(`/groups/${id}`);
   }
 
+  updateGroup(id: string, data: {name?: string; description?: string}) {
+    return this.request<any>(`/groups/${id}`, {method: 'PUT', body: JSON.stringify(data)});
+  }
+
   createGroup(data: any) {
     return this.request<any>('/groups', {method: 'POST', body: JSON.stringify(data)});
   }

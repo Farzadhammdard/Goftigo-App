@@ -3,7 +3,7 @@ import {getDb} from '../../db/connection';
 import {queryOne, queryAll, runStatement} from '../../db/helpers';
 import {generateId, now} from '../../utils/auth';
 import {generateMobileAccessToken} from '../../utils/mobileAuth';
-import {authMiddleware, AuthRequest} from '../../middleware/auth';
+import {authMiddleware, AuthenticatedRequest} from '../../middleware/auth';
 import {broadcastToConversation} from '../../websocket';
 
 const router = Router();
@@ -12,7 +12,7 @@ const router = Router();
 router.use(authMiddleware);
 
 // GET /api/admin/chat/admin-ws-token — get WS token for admin to connect as goftegoo_admin
-router.get('/admin-ws-token', async (req: AuthRequest, res: Response) => {
+router.get('/admin-ws-token', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const db = await getDb();
     const adminContact = queryOne(db, "SELECT id FROM users WHERE username = 'goftegoo_admin'") as any;
@@ -28,7 +28,7 @@ router.get('/admin-ws-token', async (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/admin/chat/conversations
-router.get('/conversations', async (req: AuthRequest, res: Response) => {
+router.get('/conversations', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const db = await getDb();
     const adminUserId = req.admin!.id;
@@ -85,7 +85,7 @@ router.get('/conversations', async (req: AuthRequest, res: Response) => {
 });
 
 // GET /api/admin/chat/conversations/:id/messages
-router.get('/conversations/:id/messages', async (req: AuthRequest, res: Response) => {
+router.get('/conversations/:id/messages', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const db = await getDb();
     const {limit: limitStr = '50', before} = req.query;
@@ -127,7 +127,7 @@ router.get('/conversations/:id/messages', async (req: AuthRequest, res: Response
 });
 
 // POST /api/admin/chat/conversations/:id/messages
-router.post('/conversations/:id/messages', async (req: AuthRequest, res: Response) => {
+router.post('/conversations/:id/messages', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const {content} = req.body;
     const db = await getDb();

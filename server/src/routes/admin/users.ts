@@ -2,7 +2,7 @@ import {Router, Response} from 'express';
 import {getDb, saveDb} from '../../db/connection';
 import {queryOne, queryAll, queryScalar, runStatement} from '../../db/helpers';
 import {authMiddleware, requirePermission, AuthenticatedRequest, logAuditAction} from '../../middleware/auth';
-import {generateId, now} from '../../utils/auth';
+import {generateId, now, hashPassword} from '../../utils/auth';
 import type {User} from '../../types';
 
 const router = Router();
@@ -105,9 +105,13 @@ router.get('/:id', authMiddleware, requirePermission('users.read'), async (req: 
 
 router.post('/', authMiddleware, requirePermission('users.write'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const {phoneNumber, username, displayName, employeeId} = req.body;
-    if (!phoneNumber || !username || !displayName) {
-      res.status(400).json({success: false, error: {code: 'VALIDATION', message: 'phoneNumber, username, displayName required'}});
+    const {phoneNumber, username, displayName, employeeId, password} = req.body;
+    if (!phoneNumber || !username || !displayName || !password) {
+      res.status(400).json({success: false, error: {code: 'VALIDATION', message: 'phoneNumber, username, displayName and password required'}});
+      return;
+    }
+    if (password.length < 4) {
+      res.status(400).json({success: false, error: {code: 'VALIDATION', message: 'Password must be at least 4 characters'}});
       return;
     }
 
@@ -121,8 +125,9 @@ router.post('/', authMiddleware, requirePermission('users.write'), async (req: A
     const id = `GFT-${generateId().slice(0, 8).toUpperCase()}`;
     const ts = now();
 
-    runStatement(db, 'INSERT INTO users (id, phone_number, username, display_name, employee_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, phoneNumber, username, displayName, employeeId || null, 'active', ts, ts]);
+    const passwordHash = await hashPassword(password);
+    runStatement(db, 'INSERT INTO users (id, phone_number, username, password_hash, display_name, employee_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, phoneNumber, username, passwordHash, displayName, employeeId || null, 'active', ts, ts]);
     saveDb();
 
     logAuditAction(db, req.admin!.id, 'user.created', 'user', id, `${displayName} (${username})`, {phoneNumber});
@@ -242,7 +247,9 @@ router.delete('/:id', authMiddleware, requirePermission('users.delete'), async (
       return;
     }
 
-    runStatement(db, 'DELETE FROM users WHERE id = ?', [req.params.id]);
+    // Keep historical references valid while removing the account from active views.
+    runStatement(db, "UPDATE users SET status = 'deleted', is_online = 0, updated_at = ? WHERE id = ?", [now(), req.params.id]);
+    runStatement(db, 'DELETE FROM refresh_tokens WHERE user_id = ?', [req.params.id]);
     saveDb();
     logAuditAction(db, req.admin!.id, 'user.deleted', 'user', user.id, user.display_name);
     res.json({success: true, data: {message: 'User deleted'}});

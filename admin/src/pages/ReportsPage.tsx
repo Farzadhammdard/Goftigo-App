@@ -5,6 +5,8 @@ export function ReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
+  const [selected, setSelected] = useState<any>(null);
+  const [resolution, setResolution] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -20,12 +22,18 @@ export function ReportsPage() {
   useEffect(() => { load(); }, [filter]);
 
   const handleUpdate = async (id: string, status: string) => {
-    try { await api.updateReport(id, {status}); load(); } catch (e: any) { alert(e.message); }
+    try { await api.updateReport(id, {status, resolution: resolution || undefined}); setSelected(null); setResolution(''); load(); } catch (e: any) { alert(e.message); }
   };
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Reports</h1>
+      {selected && <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+        <div className="flex justify-between"><h3 className="font-semibold">Report details</h3><button onClick={() => setSelected(null)} className="text-gray-500">Close</button></div>
+        <p className="text-sm text-gray-600 mt-3 whitespace-pre-wrap">{selected.description || selected.reason}</p>
+        <textarea value={resolution} onChange={e => setResolution(e.target.value)} placeholder="Resolution note (optional)"
+          className="w-full mt-3 px-3 py-2 border rounded-lg text-sm" rows={2} />
+      </div>}
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="p-4 flex gap-3 border-b border-gray-200">
           <select value={filter} onChange={e => setFilter(e.target.value)}
@@ -55,7 +63,7 @@ export function ReportsPage() {
                 <tr key={r.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm">{r.reporterName || 'Unknown'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{r.targetType}: {r.targetId?.slice(0, 8)}...</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">{r.reason}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate"><button onClick={() => { setSelected(r); setResolution(r.resolution || ''); }} className="text-left hover:underline">{r.reason}</button></td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
                       r.status === 'open' ? 'bg-red-100 text-red-700' :

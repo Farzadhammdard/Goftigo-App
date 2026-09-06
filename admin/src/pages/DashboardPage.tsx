@@ -7,7 +7,7 @@ function StatCard({label, value, icon, color = 'primary'}: {label: string; value
     green: 'bg-green-50 text-green-600',
     yellow: 'bg-yellow-50 text-yellow-600',
     red: 'bg-red-50 text-red-600',
-    purple: 'bg-purple-50 text-purple-600',
+    purple: 'bg-primary-50 text-primary-600',
   };
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">

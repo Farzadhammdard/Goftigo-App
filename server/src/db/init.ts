@@ -326,6 +326,41 @@ export async function initializeDatabase(): Promise<void> {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS follows (
+      follower_id TEXT NOT NULL,
+      following_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (follower_id, following_id),
+      FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (following_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      settings_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, category)
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS blocked_users (
+      blocker_id TEXT NOT NULL,
+      blocked_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (blocker_id, blocked_id)
+    )
+  `);
+
+  db.run('CREATE INDEX IF NOT EXISTS idx_user_settings_user ON user_settings(user_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_blocked_users_blocker ON blocked_users(blocker_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_blocked_users_blocked ON blocked_users(blocked_id)');
+
   saveDb();
   console.log('Database initialized successfully');
 }

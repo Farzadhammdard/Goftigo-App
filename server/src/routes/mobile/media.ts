@@ -33,7 +33,7 @@ router.post('/upload', mobileAuthMiddleware, async (req: MobileAuthRequest, res:
     }
 
     // Validate mime type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/webm', 'audio/mpeg', 'audio/ogg'];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/webm', 'audio/mpeg', 'audio/ogg', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'application/zip'];
     if (!allowedTypes.includes(mimeType)) {
       res.status(415).json({success: false, error: {code: 'UNSUPPORTED_TYPE', message: 'File type not supported'}});
       return;
@@ -45,7 +45,7 @@ router.post('/upload', mobileAuthMiddleware, async (req: MobileAuthRequest, res:
 
     fs.writeFileSync(filePath, buffer);
 
-    const baseUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 3001}`;
+    const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
     const url = `${baseUrl}/api/media/file/${fileName}`;
 
     res.json({

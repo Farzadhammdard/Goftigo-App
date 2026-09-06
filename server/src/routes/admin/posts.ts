@@ -3,6 +3,8 @@ import {getDb, saveDb} from '../../db/connection';
 import {queryOne, queryAll, queryScalar, runStatement} from '../../db/helpers';
 import {authMiddleware, requirePermission, AuthenticatedRequest, logAuditAction} from '../../middleware/auth';
 import type {Post} from '../../types';
+import {sendToUser, broadcastToAll} from '../../websocket';
+import {generateId} from '../../utils/auth';
 
 const router = Router();
 
@@ -92,9 +94,27 @@ router.put('/:id/status', authMiddleware, requirePermission('posts.moderate'), a
       return;
     }
 
-    runStatement(db, 'UPDATE posts SET status = ?, updated_at = ? WHERE id = ?', [status, Date.now(), req.params.id]);
+    const updatedAt = Date.now();
+    runStatement(db, 'UPDATE posts SET status = ?, updated_at = ? WHERE id = ?', [status, updatedAt, req.params.id]);
     saveDb();
     logAuditAction(db, req.admin!.id, `post.${status}`, 'post', post.id, (post as any).caption || 'No caption');
+    const notificationType = status === 'active' ? 'post_approved' : status === 'rejected' ? 'post_rejected' : null;
+    if (notificationType) {
+      const notificationId = generateId();
+      const title = status === 'active' ? 'Post approved' : 'Post rejected';
+      const body = status === 'active'
+        ? 'Your post is now visible in the social feed.'
+        : 'Your post was rejected by an administrator.';
+      runStatement(db,
+        'INSERT INTO notifications (id, user_id, type, title, body, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [notificationId, (post as any).author_id, notificationType, title, body, JSON.stringify({postId: post.id}), updatedAt]
+      );
+      sendToUser((post as any).author_id, {
+        type: 'notification',
+        notification: {id: notificationId, type: notificationType, title, body, createdAt: updatedAt},
+      });
+    }
+    broadcastToAll({type: 'post_updated', postId: post.id, status});
     res.json({success: true, data: {message: `Post ${status}`}});
   } catch (error) {
     console.error('Update post status error:', error);

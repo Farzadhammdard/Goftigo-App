@@ -301,7 +301,7 @@ export function ChatPage() {
         {selectedConv ? (
           <>
             <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold">
+              <div className="w-10 h-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-bold">
                 {(selectedConv.displayName || '?')[0].toUpperCase()}
               </div>
               <div>
@@ -319,19 +319,19 @@ export function ChatPage() {
                   <div key={msg.id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[70%] rounded-xl px-4 py-2 ${
                       isAdmin
-                        ? 'bg-indigo-500 text-white'
+                        ? 'bg-primary-500 text-white'
                         : 'bg-gray-100 text-gray-900'
                     }`}>
                       {!isAdmin && (
-                        <p className="text-xs font-medium text-indigo-500 mb-1">{msg.sender_name || msg.sender_username}</p>
+                        <p className="text-xs font-medium text-primary-600 mb-1">{msg.sender_name || msg.sender_username}</p>
                       )}
                       <p className="text-sm">{msg.is_deleted ? <em>Deleted</em> : msg.content}</p>
                       <div className="flex items-center justify-end gap-1 mt-1">
-                        <p className={`text-xs ${isAdmin ? 'text-indigo-200' : 'text-gray-400'}`}>
+                        <p className={`text-xs ${isAdmin ? 'text-primary-100' : 'text-gray-400'}`}>
                           {formatTime(msg.created_at)}
                         </p>
                         {isAdmin && (
-                          <span className={`text-xs ${msg.status === 'read' ? 'text-green-300' : msg.status === 'delivered' ? 'text-indigo-200' : 'text-indigo-300'}`}>
+                          <span className={`text-xs ${msg.status === 'read' ? 'text-green-300' : msg.status === 'delivered' ? 'text-primary-100' : 'text-primary-200'}`}>
                             {msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}
                           </span>
                         )}
@@ -350,13 +350,13 @@ export function ChatPage() {
                   onChange={e => setNewMessage(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Type a reply..."
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
                   rows={2}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!newMessage.trim() || sending}
-                  className="px-4 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed self-end">
+                  className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed self-end">
                   {sending ? 'Sending...' : 'Send'}
                 </button>
               </div>
