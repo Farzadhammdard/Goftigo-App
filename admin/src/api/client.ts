@@ -16,6 +16,10 @@ class ApiClient {
     this.refreshToken = localStorage.getItem('admin_refresh');
   }
 
+  getAccessToken(): string | null {
+    return this.accessToken || localStorage.getItem('admin_access');
+  }
+
   clearTokens() {
     this.accessToken = null;
     this.refreshToken = null;

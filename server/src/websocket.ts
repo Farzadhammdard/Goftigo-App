@@ -3,6 +3,7 @@ const WebSocketModule = require('ws');
 const WebSocketServer = WebSocketModule.WebSocketServer;
 const WebSocket = WebSocketModule.default || WebSocketModule;
 import {verifyMobileToken} from './utils/mobileAuth';
+import {verifyToken} from './utils/auth';
 import {getDb} from './db/connection';
 import {queryOne, queryAll, runStatement} from './db/helpers';
 import {now} from './utils/auth';
@@ -19,6 +20,7 @@ interface AuthenticatedSocket {
 }
 
 const clients = new Map<string, AuthenticatedSocket[]>();
+const adminClients: AuthenticatedSocket[] = [];
 
 export function setupWebSocket(server: HttpServer): void {
   const wss = new WebSocketServer({server, path: '/ws'});
@@ -33,52 +35,72 @@ export function setupWebSocket(server: HttpServer): void {
     }
 
     try {
-      const payload = verifyMobileToken(token);
+      // Try admin token first
+      let payload: any = null;
+      let isAdmin = false;
+      try {
+        payload = verifyToken(token);
+        // Check if payload has admin role
+        isAdmin = payload.role && (payload.role === 'super_admin' || payload.role === 'admin');
+      } catch {
+        payload = verifyMobileToken(token);
+        isAdmin = false;
+      }
+
       ws.userId = payload.userId;
       ws.isAlive = true;
 
-      if (!clients.has(payload.userId)) {
-        clients.set(payload.userId, []);
+      if (isAdmin) {
+        adminClients.push(ws);
+        console.log('[WS] Admin connected');
+
+        ws.on('close', () => {
+          const idx = adminClients.indexOf(ws);
+          if (idx >= 0) adminClients.splice(idx, 1);
+          console.log('[WS] Admin disconnected');
+        });
+
+        ws.send(JSON.stringify({type: 'connected', message: 'Connected to Goftegoo WebSocket (Admin)', userId: payload.userId}));
+      } else {
+        if (!clients.has(payload.userId)) {
+          clients.set(payload.userId, []);
+        }
+        clients.get(payload.userId)!.push(ws);
+
+        getDb().then(db => {
+          runStatement(db, 'UPDATE users SET is_online = 1, last_seen_at = ? WHERE id = ?', [now(), payload.userId]);
+          broadcastUserStatus(payload.userId, true);
+        });
+
+        console.log(`[WS] User ${payload.userId} connected (total: ${clients.get(payload.userId)?.length})`);
+
+        ws.on('pong', () => { ws.isAlive = true; });
+
+        ws.on('message', (data) => {
+          try {
+            const msg = JSON.parse(data.toString());
+            handleMessage(ws, msg);
+          } catch (e) {
+            ws.send(JSON.stringify({type: 'error', message: 'Invalid message format'}));
+          }
+        });
+
+        ws.on('close', () => {
+          const userClients = clients.get(payload.userId) || [];
+          clients.set(payload.userId, userClients.filter(c => c !== ws));
+
+          if (clients.get(payload.userId)?.length === 0) {
+            clients.delete(payload.userId);
+            getDb().then(db => {
+              runStatement(db, 'UPDATE users SET is_online = 0, last_seen_at = ? WHERE id = ?', [now(), payload.userId]);
+              broadcastUserStatus(payload.userId, false);
+            });
+          }
+          console.log(`[WS] User ${payload.userId} disconnected`);
+        });
+
+        ws.send(JSON.stringify({type: 'connected', message: 'Connected to Goftegoo WebSocket', userId: payload.userId}));
       }
-      clients.get(payload.userId)!.push(ws);
-
-      getDb().then(db => {
-        runStatement(db, 'UPDATE users SET is_online = 1, last_seen_at = ? WHERE id = ?', [now(), payload.userId]);
-        // Notify all contacts that this user is now online
-        broadcastUserStatus(payload.userId, true);
-      });
-
-      console.log(`[WS] User ${payload.userId} connected (total: ${clients.get(payload.userId)?.length})`);
-
-      ws.on('pong', () => {
-        ws.isAlive = true;
-      });
-
-      ws.on('message', (data) => {
-        try {
-          const msg = JSON.parse(data.toString());
-          handleMessage(ws, msg);
-        } catch (e) {
-          ws.send(JSON.stringify({type: 'error', message: 'Invalid message format'}));
-        }
-      });
-
-      ws.on('close', () => {
-        const userClients = clients.get(payload.userId) || [];
-        clients.set(payload.userId, userClients.filter(c => c !== ws));
-
-        if (clients.get(payload.userId)?.length === 0) {
-          clients.delete(payload.userId);
-          getDb().then(db => {
-            runStatement(db, 'UPDATE users SET is_online = 0, last_seen_at = ? WHERE id = ?', [now(), payload.userId]);
-            broadcastUserStatus(payload.userId, false);
-          });
-        }
-
-        console.log(`[WS] User ${payload.userId} disconnected`);
-      });
-
-      ws.send(JSON.stringify({type: 'connected', message: 'Connected to Goftegoo WebSocket', userId: payload.userId}));
     } catch (error) {
       ws.close(1008, 'Invalid token');
     }
@@ -103,8 +125,12 @@ export function setupWebSocket(server: HttpServer): void {
   console.log('WebSocket server initialized on /ws');
 }
 
-function broadcastUserStatus(userId: string, isOnline: boolean): void {
+export function broadcastUserStatus(userId: string, isOnline: boolean): void {
   getDb().then(db => {
+    const user = queryOne(db, 'SELECT status FROM users WHERE id = ?', [userId]) as {status: string} | undefined;
+    const status = user?.status || 'active';
+
+    // Notify contacts
     const conversations = queryAll(db,
       'SELECT DISTINCT conversation_id FROM conversation_participants WHERE user_id = ?',
       [userId]
@@ -123,6 +149,12 @@ function broadcastUserStatus(userId: string, isOnline: boolean): void {
         });
       }
     }
+
+    // Notify admins
+    const data = JSON.stringify({type: 'user_status', userId, isOnline, lastSeenAt: now(), status});
+    adminClients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) client.send(data);
+    });
   });
 }
 

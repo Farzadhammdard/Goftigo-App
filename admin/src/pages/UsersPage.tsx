@@ -1,6 +1,8 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useState, useRef, useCallback} from 'react';
 import {Link} from 'react-router-dom';
 import {api} from '../api/client';
+import {adminWs} from '../services/websocket';
+import {useAuthStore} from '../store/authStore';
 
 export function UsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -9,8 +11,13 @@ export function UsersPage() {
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const tokenRef = useRef(api.getAccessToken());
 
-  const load = async (searchOverride = search) => {
+  useEffect(() => {
+    tokenRef.current = api.getAccessToken();
+  }, [api.getAccessToken()]);
+
+  const load = useCallback(async (searchOverride = search) => {
     setLoading(true);
     try {
       const params: Record<string, string> = {page: String(page), pageSize: '20'};
@@ -21,9 +28,32 @@ export function UsersPage() {
       setMeta(result.meta);
     } catch (e) { console.error(e); }
     setLoading(false);
-  };
+  }, [page, search, status]);
 
-  useEffect(() => { load(); }, [page, status]);
+  useEffect(() => { load(); }, [page, status, load]);
+
+  // Real-time user status updates
+  useEffect(() => {
+    if (!tokenRef.current) return;
+    adminWs.connect(tokenRef.current);
+
+    const handleUserStatus = (data: any) => {
+      setUsers(prev => prev.map(u => {
+        if (u.id === data.userId) {
+          return {...u, isOnline: data.isOnline, lastSeenAt: data.lastSeenAt, status: data.status};
+        }
+        return u;
+      }));
+    };
+
+    adminWs.on('user_status', handleUserStatus);
+    adminWs.on('user_updated', handleUserStatus);
+
+    return () => {
+      adminWs.off('user_status', handleUserStatus);
+      adminWs.off('user_updated', handleUserStatus);
+    };
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => { e.preventDefault(); setPage(1); load(search); };
 
@@ -64,21 +94,23 @@ export function UsersPage() {
         </div>
 
         <table className="w-full">
-          <thead className="bg-gray-50 border-y border-gray-200">
-            <tr>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">User</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Phone</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">ID</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Joined</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
+<thead className="bg-gray-50 border-y border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">User</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Phone</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">ID</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Online</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Last Seen</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Joined</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
             ) : users.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">No users found</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">No users found</td></tr>
             ) : users.map(user => (
               <tr key={user.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3">
@@ -95,12 +127,21 @@ export function UsersPage() {
                 <td className="px-4 py-3 text-sm text-gray-600">{user.phoneNumber}</td>
                 <td className="px-4 py-3 text-sm text-gray-600 font-mono">{user.id}</td>
                 <td className="px-4 py-3">
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full ${
+                    user.isOnline ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${user.isOnline ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+                    {user.isOnline ? 'Online' : 'Offline'}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
                   <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
                     user.status === 'active' ? 'bg-green-100 text-green-700' :
                     user.status === 'suspended' ? 'bg-yellow-100 text-yellow-700' :
                     'bg-red-100 text-red-700'
                   }`}>{user.status}</span>
                 </td>
+                <td className="px-4 py-3 text-sm text-gray-500">{user.lastSeenAt ? new Date(user.lastSeenAt).toLocaleString() : 'Never'}</td>
                 <td className="px-4 py-3 text-sm text-gray-500">{new Date(user.createdAt).toLocaleDateString()}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex gap-1 justify-end">

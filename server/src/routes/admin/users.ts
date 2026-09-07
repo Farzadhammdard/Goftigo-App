@@ -4,6 +4,7 @@ import {queryOne, queryAll, queryScalar, runStatement} from '../../db/helpers';
 import {authMiddleware, requirePermission, AuthenticatedRequest, logAuditAction} from '../../middleware/auth';
 import {generateId, now, hashPassword} from '../../utils/auth';
 import type {User} from '../../types';
+import {broadcastUserStatus} from '../../websocket';
 
 const router = Router();
 
@@ -200,6 +201,7 @@ router.put('/:id/status', authMiddleware, requirePermission('users.write'), asyn
     saveDb();
 
     logAuditAction(db, req.admin!.id, `user.${status}`, 'user', user.id, user.display_name, {previousStatus: user.status});
+    broadcastUserStatus(req.params.id, status === 'active');
     res.json({success: true, data: {message: `User ${status}`}});
   } catch (error) {
     console.error('Update user status error:', error);
@@ -240,21 +242,31 @@ router.delete('/:id/devices/:deviceId', authMiddleware, requirePermission('users
 
 router.delete('/:id', authMiddleware, requirePermission('users.delete'), async (req: AuthenticatedRequest, res: Response) => {
   try {
+    console.log('[DELETE USER] Attempting to delete user:', req.params.id);
     const db = await getDb();
     const user = queryOne(db, 'SELECT * FROM users WHERE id = ?', [req.params.id]) as User | undefined;
+    console.log('[DELETE USER] User found:', !!user);
     if (!user) {
       res.status(404).json({success: false, error: {code: 'NOT_FOUND', message: 'User not found'}});
       return;
     }
 
     // Keep historical references valid while removing the account from active views.
+    console.log('[DELETE USER] Running UPDATE...');
     runStatement(db, "UPDATE users SET status = 'deleted', is_online = 0, updated_at = ? WHERE id = ?", [now(), req.params.id]);
+    console.log('[DELETE USER] Running DELETE refresh_tokens...');
     runStatement(db, 'DELETE FROM refresh_tokens WHERE user_id = ?', [req.params.id]);
+    console.log('[DELETE USER] Saving DB...');
     saveDb();
+    console.log('[DELETE USER] Logging audit...');
     logAuditAction(db, req.admin!.id, 'user.deleted', 'user', user.id, user.display_name);
+    console.log('[DELETE USER] Broadcasting status...');
+    broadcastUserStatus(req.params.id, false);
+    console.log('[DELETE USER] Success');
     res.json({success: true, data: {message: 'User deleted'}});
   } catch (error) {
-    console.error('Delete user error:', error);
+    console.error('[DELETE USER] ERROR:', error);
+    console.error('[DELETE USER] Stack:', error instanceof Error ? error.stack : 'no stack');
     res.status(500).json({success: false, error: {code: 'INTERNAL', message: 'Failed to delete user'}});
   }
 });

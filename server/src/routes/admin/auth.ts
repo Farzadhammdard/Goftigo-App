@@ -9,6 +9,7 @@ const router = Router();
 
 router.post('/login', async (req: Request, res: Response) => {
   try {
+    console.log('[ADMIN LOGIN] Attempt:', req.body.email);
     const {email, password} = req.body;
     if (!email || !password) {
       res.status(400).json({success: false, error: {code: 'VALIDATION', message: 'Email and password required'}});
@@ -16,14 +17,16 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     const db = await getDb();
+    console.log('[ADMIN LOGIN] DB obtained');
     const admin = queryOne(db, 'SELECT * FROM admin_users WHERE (email = ? OR username = ?) AND is_active = 1', [email, email]) as AdminUser | undefined;
-
+    console.log('[ADMIN LOGIN] Admin found:', !!admin);
     if (!admin) {
       res.status(401).json({success: false, error: {code: 'AUTH_FAILED', message: 'Invalid credentials'}});
       return;
     }
 
     const valid = await comparePassword(password, admin.password_hash);
+    console.log('[ADMIN LOGIN] Password valid:', valid);
     if (!valid) {
       res.status(401).json({success: false, error: {code: 'AUTH_FAILED', message: 'Invalid credentials'}});
       return;
@@ -32,11 +35,14 @@ router.post('/login', async (req: Request, res: Response) => {
     const payload = {adminId: admin.id, role: admin.role};
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
+    console.log('[ADMIN LOGIN] Tokens generated');
 
     runStatement(db, 'UPDATE admin_users SET last_login_at = ?, updated_at = ? WHERE id = ?', [now(), now(), admin.id]);
     saveDb();
+    console.log('[ADMIN LOGIN] DB saved');
 
     logAuditAction(db, admin.id, 'admin.login', 'admin', admin.id, admin.email);
+    console.log('[ADMIN LOGIN] Audit logged');
 
     res.json({
       success: true,
@@ -53,7 +59,8 @@ router.post('/login', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('[ADMIN LOGIN] ERROR:', error);
+    console.error('[ADMIN LOGIN] Stack:', error instanceof Error ? error.stack : 'no stack');
     res.status(500).json({success: false, error: {code: 'INTERNAL', message: 'Internal server error'}});
   }
 });

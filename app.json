@@ -23,6 +23,7 @@
       },
       "usesCleartextTraffic": true,
       "package": "com.goftgoo.app",
+      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",

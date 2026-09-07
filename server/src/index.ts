@@ -30,7 +30,7 @@ import mobileFollowRoutes from './routes/mobile/follows';
 import mobileSettingsRoutes from './routes/mobile/settings';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
 app.use(cors({
   origin: true,
@@ -211,5 +211,14 @@ async function main() {
   // Initialize WebSocket server
   setupWebSocket(server);
 }
+
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+  console.error(err.stack);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION:', reason);
+});
 
 main().catch(console.error);
