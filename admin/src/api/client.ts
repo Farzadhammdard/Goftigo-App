@@ -41,7 +41,9 @@ class ApiClient {
 
     if (!res.ok) {
       let errorData: any = {};
-      try { errorData = await res.json(); } catch {}
+      try {
+        errorData = await res.json();
+      } catch {}
 
       if (res.status === 401 && this.refreshToken) {
         try {
@@ -52,12 +54,20 @@ class ApiClient {
           });
           const refreshData = await refreshRes.json();
           if (refreshData.success) {
-            this.setTokens(refreshData.data.accessToken, refreshData.data.refreshToken);
+            this.setTokens(
+              refreshData.data.accessToken,
+              refreshData.data.refreshToken,
+            );
             headers['Authorization'] = `Bearer ${refreshData.data.accessToken}`;
-            const retryRes = await fetch(`${API_BASE}${path}`, {...options, headers});
+            const retryRes = await fetch(`${API_BASE}${path}`, {
+              ...options,
+              headers,
+            });
             if (!retryRes.ok) {
               let retryErr: any = {};
-              try { retryErr = await retryRes.json(); } catch {}
+              try {
+                retryErr = await retryRes.json();
+              } catch {}
               throw new Error(retryErr.error?.message || 'Request failed');
             }
             const retryData = await retryRes.json();
@@ -72,7 +82,9 @@ class ApiClient {
           throw new Error(e.message || 'Session expired');
         }
       }
-      throw new Error(errorData.error?.message || `Request failed (${res.status})`);
+      throw new Error(
+        errorData.error?.message || `Request failed (${res.status})`,
+      );
     }
 
     const data = await res.json();
@@ -84,7 +96,11 @@ class ApiClient {
 
   // Auth
   login(email: string, password: string) {
-    return this.request<{admin: any; accessToken: string; refreshToken: string}>('/auth/login', {
+    return this.request<{
+      admin: any;
+      accessToken: string;
+      refreshToken: string;
+    }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({email, password}),
     });
@@ -114,15 +130,24 @@ class ApiClient {
   }
 
   createUser(data: any) {
-    return this.request<any>('/users', {method: 'POST', body: JSON.stringify(data)});
+    return this.request<any>('/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   updateUser(id: string, data: any) {
-    return this.request<any>(`/users/${id}`, {method: 'PUT', body: JSON.stringify(data)});
+    return this.request<any>(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   }
 
   updateUserStatus(id: string, status: string) {
-    return this.request<any>(`/users/${id}/status`, {method: 'PUT', body: JSON.stringify({status})});
+    return this.request<any>(`/users/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({status}),
+    });
   }
 
   deleteUser(id: string) {
@@ -140,11 +165,17 @@ class ApiClient {
   }
 
   updateGroup(id: string, data: {name?: string; description?: string}) {
-    return this.request<any>(`/groups/${id}`, {method: 'PUT', body: JSON.stringify(data)});
+    return this.request<any>(`/groups/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   }
 
   createGroup(data: any) {
-    return this.request<any>('/groups', {method: 'POST', body: JSON.stringify(data)});
+    return this.request<any>('/groups', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   deleteGroup(id: string) {
@@ -158,17 +189,10 @@ class ApiClient {
   }
 
   updatePostStatus(id: string, status: string) {
-    return this.request<any>(`/posts/${id}/status`, {method: 'PUT', body: JSON.stringify({status})});
-  }
-
-  // Reports
-  getReports(params?: Record<string, string>) {
-    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return this.request<{data: any[]; meta: any}>(`/reports${qs}`);
-  }
-
-  updateReport(id: string, data: any) {
-    return this.request<any>(`/reports/${id}`, {method: 'PUT', body: JSON.stringify(data)});
+    return this.request<any>(`/posts/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({status}),
+    });
   }
 
   // System
@@ -177,12 +201,10 @@ class ApiClient {
   }
 
   updateSettings(settings: Record<string, string>) {
-    return this.request<any>('/system/settings', {method: 'PUT', body: JSON.stringify({settings})});
-  }
-
-  getAuditLog(params?: Record<string, string>) {
-    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return this.request<{data: any[]; meta: any}>(`/system/audit-log${qs}`);
+    return this.request<any>('/system/settings', {
+      method: 'PUT',
+      body: JSON.stringify({settings}),
+    });
   }
 
   getAnnouncements() {
@@ -190,7 +212,10 @@ class ApiClient {
   }
 
   createAnnouncement(data: any) {
-    return this.request<any>('/system/announcements', {method: 'POST', body: JSON.stringify(data)});
+    return this.request<any>('/system/announcements', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   // Admins
@@ -199,7 +224,10 @@ class ApiClient {
   }
 
   createAdmin(data: any) {
-    return this.request<any>('/admins', {method: 'POST', body: JSON.stringify(data)});
+    return this.request<any>('/admins', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   // Chat / Conversations
@@ -208,15 +236,36 @@ class ApiClient {
     return this.request<{data: any[]; meta: any}>(`/chat/conversations${qs}`);
   }
 
-  getConversationMessages(conversationId: string, params?: Record<string, string>) {
+  getConversationMessages(
+    conversationId: string,
+    params?: Record<string, string>,
+  ) {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return this.request<{data: any[]; meta: any}>(`/chat/conversations/${conversationId}/messages${qs}`);
+    return this.request<{data: any[]; meta: any}>(
+      `/chat/conversations/${conversationId}/messages${qs}`,
+    );
   }
 
   sendConversationMessage(conversationId: string, content: string) {
     return this.request<any>(`/chat/conversations/${conversationId}/messages`, {
       method: 'POST',
       body: JSON.stringify({content}),
+    });
+  }
+
+  createUserConversation(userId: string) {
+    return this.request<any>(`/chat/conversations/user/${userId}`, {
+      method: 'POST',
+    });
+  }
+
+  sendConversationMedia(
+    conversationId: string,
+    data: {data: string; mimeType: string; filename: string; type: string},
+  ) {
+    return this.request<any>(`/chat/conversations/${conversationId}/media`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
   }
 }

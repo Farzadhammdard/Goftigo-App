@@ -1,5 +1,8 @@
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import type {CompositeNavigationProp, NavigatorScreenParams} from '@react-navigation/native';
+import type {
+  CompositeNavigationProp,
+  NavigatorScreenParams,
+} from '@react-navigation/native';
 import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 
 export type AuthStackParamList = {
@@ -18,6 +21,7 @@ export type ChatStackParamList = {
     participantAvatar?: string;
   };
   GlobalSearch: undefined;
+  QuickAdd: undefined;
   UserProfile: {userId: string};
 };
 

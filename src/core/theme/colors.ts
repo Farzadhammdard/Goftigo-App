@@ -72,11 +72,11 @@ const DarkColors = {
 
 export type ThemeColorKeys = keyof typeof LightColors;
 
-let _current: typeof LightColors = LightColors;
+let _current: Record<string, string> = LightColors as Record<string, string>;
 
-export const Colors = new Proxy(LightColors, {
+export const Colors = new Proxy({} as Record<string, string>, {
   get(_target, prop: string) {
-    return (_current as any)[prop];
+    return _current[prop];
   },
 });
 

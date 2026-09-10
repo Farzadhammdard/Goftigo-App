@@ -36,7 +36,7 @@ async function getAdminUserToken(): Promise<string | null> {
   try {
     const res = await fetch('/api/admin/chat/admin-ws-token', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('admin_access')}`,
+        Authorization: `Bearer ${localStorage.getItem('admin_access')}`,
         'Content-Type': 'application/json',
       },
     });
@@ -49,12 +49,15 @@ async function getAdminUserToken(): Promise<string | null> {
 
 export function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
+  const [sendingMedia, setSendingMedia] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const selectedConvRef = useRef<Conversation | null>(null);
   selectedConvRef.current = selectedConv;
@@ -68,7 +71,10 @@ export function ChatPage() {
         adminWs.connect(token);
       }
     })();
-    return () => { mounted = false; adminWs.disconnect(); };
+    return () => {
+      mounted = false;
+      adminWs.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -141,14 +147,24 @@ export function ChatPage() {
 
     const onMessagesRead = (data: any) => {
       if (selectedConvRef.current?.id === data.conversationId) {
-        setMessages(prev => prev.map(m =>
-          m.sender_username === 'goftegoo_admin' ? {...m, status: 'read'} : m
-        ));
+        setMessages(prev =>
+          prev.map(m =>
+            m.sender_username === 'goftegoo_admin' ? {...m, status: 'read'} : m,
+          ),
+        );
       }
     };
 
     const onTyping = (data: any) => {
-      // Could show typing indicator in header
+      if (!data.conversationId || data.userId === 'goftegoo_admin') return;
+      setTypingUsers(prev => ({...prev, [data.conversationId]: data.isTyping}));
+      if (data.isTyping) {
+        window.setTimeout(
+          () =>
+            setTypingUsers(prev => ({...prev, [data.conversationId]: false})),
+          3000,
+        );
+      }
     };
 
     adminWs.on('new_message', onNewMessage);
@@ -175,6 +191,19 @@ export function ChatPage() {
     }
   };
 
+  const loadUsers = async () => {
+    try {
+      const result = await api.getUsers({
+        page: '1',
+        pageSize: '100',
+        status: 'active',
+      });
+      setUsers((result as any).data || []);
+    } catch (error) {
+      console.error('Failed to load users:', error);
+    }
+  };
+
   const loadMessages = async (convId: string) => {
     try {
       const data = await api.getConversationMessages(convId);
@@ -185,7 +214,58 @@ export function ChatPage() {
     }
   };
 
-  useEffect(() => { loadConversations(); }, []);
+  useEffect(() => {
+    loadConversations();
+    loadUsers();
+  }, []);
+
+  const openUserChat = async (user: any) => {
+    try {
+      const result = await api.createUserConversation(user.id);
+      await loadConversations();
+      const refreshed = (await api.getConversations()) as any;
+      const conversation = (
+        Array.isArray(refreshed) ? refreshed : refreshed.data || []
+      ).find((item: Conversation) => item.id === result.conversationId);
+      if (conversation) setSelectedConv(conversation);
+    } catch (error: any) {
+      alert(error.message || 'Could not open user chat');
+    }
+  };
+
+  const handleMedia = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedConv || sendingMedia) return;
+    setSendingMedia(true);
+    try {
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () =>
+          resolve(String(reader.result).split(',')[1] || '');
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const type = file.type.startsWith('image/')
+        ? 'image'
+        : file.type.startsWith('video/')
+          ? 'video'
+          : file.type.startsWith('audio/')
+            ? 'voice'
+            : 'file';
+      const result = (await api.sendConversationMedia(selectedConv.id, {
+        data,
+        mimeType: file.type || 'application/octet-stream',
+        filename: file.name,
+        type,
+      })) as any;
+      setMessages(prev => [...prev, result.message]);
+    } catch (error: any) {
+      alert(error.message || 'Could not upload file');
+    } finally {
+      setSendingMedia(false);
+      event.target.value = '';
+    }
+  };
 
   useEffect(() => {
     if (selectedConv) {
@@ -206,18 +286,33 @@ export function ChatPage() {
     // Optimistic
     const tempId = `admin-temp-${Date.now()}`;
     const optimistic: Message = {
-      id: tempId, conversation_id: selectedConv.id, sender_id: 'admin',
-      content: msgText, type: 'text', status: 'sending', is_edited: 0,
-      is_deleted: 0, created_at: Date.now(), sender_username: 'goftegoo_admin',
-      sender_name: 'Admin', sender_avatar: null,
+      id: tempId,
+      conversation_id: selectedConv.id,
+      sender_id: 'admin',
+      content: msgText,
+      type: 'text',
+      status: 'sending',
+      is_edited: 0,
+      is_deleted: 0,
+      created_at: Date.now(),
+      sender_username: 'goftegoo_admin',
+      sender_name: 'Admin',
+      sender_avatar: null,
     };
     setMessages(prev => [...prev, optimistic]);
 
     try {
-      const result = await api.sendConversationMessage(selectedConv.id, msgText) as any;
-      setMessages(prev => prev.map(m => m.id === tempId ? result.message : m));
+      const result = (await api.sendConversationMessage(
+        selectedConv.id,
+        msgText,
+      )) as any;
+      setMessages(prev =>
+        prev.map(m => (m.id === tempId ? result.message : m)),
+      );
     } catch (error) {
-      setMessages(prev => prev.map(m => m.id === tempId ? {...m, status: 'failed'} : m));
+      setMessages(prev =>
+        prev.map(m => (m.id === tempId ? {...m, status: 'failed'} : m)),
+      );
       console.error('Failed to send:', error);
     } finally {
       setSending(false);
@@ -247,47 +342,120 @@ export function ChatPage() {
       <div className="w-80 border-r border-gray-200 flex flex-col">
         <div className="p-4 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-800">Support Chat</h2>
-            <span className={`text-xs px-2 py-0.5 rounded-full ${wsConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            <h2 className="text-lg font-semibold text-gray-800">
+              Support Chat
+            </h2>
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full ${wsConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
               {wsConnected ? '🟢 Live' : '🔴 Offline'}
             </span>
           </div>
-          <p className="text-sm text-gray-500 mt-1">{conversations.length} conversations</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {conversations.length} conversations
+          </p>
         </div>
         <div className="flex-1 overflow-y-auto">
+          <div className="p-3 border-b border-gray-200 bg-white">
+            <p className="text-xs font-semibold uppercase text-gray-500 mb-2">
+              All users
+            </p>
+            {users.map(user => {
+              const conversation = conversations.find(
+                conv => conv.displayUserId === user.id,
+              );
+              return (
+                <button
+                  key={user.id}
+                  onClick={() =>
+                    conversation
+                      ? setSelectedConv(conversation)
+                      : openUserChat(user)
+                  }
+                  className="w-full flex items-center gap-2 p-2 text-left hover:bg-gray-50 rounded">
+                  {user.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt=""
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs">
+                      {(user.displayName || '?')[0]}
+                    </span>
+                  )}
+                  <span className="text-sm truncate">
+                    {user.displayName || user.username}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
           {loading ? (
             <div className="p-4 text-center text-gray-400">Loading...</div>
           ) : conversations.length === 0 ? (
-            <div className="p-4 text-center text-gray-400">No conversations yet</div>
+            <div className="p-4 text-center text-gray-400">
+              No conversations yet
+            </div>
           ) : (
             conversations.map(conv => (
               <div
                 key={conv.id}
-                onClick={() => { setSelectedConv(conv); }}
+                onClick={() => {
+                  setSelectedConv(conv);
+                }}
                 className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition ${
-                  selectedConv?.id === conv.id ? 'bg-indigo-50 border-l-4 border-l-indigo-500' : ''
+                  selectedConv?.id === conv.id
+                    ? 'bg-indigo-50 border-l-4 border-l-indigo-500'
+                    : ''
                 }`}>
                 <div className="flex items-center gap-3">
                   <div className="relative">
-                    <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                      {(conv.displayName || '?')[0].toUpperCase()}
-                    </div>
-                    {(conv as any).participants?.some((p: any) => p.is_online === 1 && p.username !== 'goftegoo_admin') && (
+                    {conv.displayAvatar ? (
+                      <img
+                        src={conv.displayAvatar}
+                        alt=""
+                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                        {(conv.displayName || '?')[0].toUpperCase()}
+                      </div>
+                    )}
+                    {(conv as any).participants?.some(
+                      (p: any) =>
+                        p.is_online === 1 && p.username !== 'goftegoo_admin',
+                    ) && (
                       <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-baseline">
-                      <span className="font-medium text-gray-900 truncate">{conv.displayName}</span>
+                      <span className="font-medium text-gray-900 truncate">
+                        {conv.displayName}
+                      </span>
                       {conv.last_message_at && (
-                        <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{formatTime(conv.last_message_at)}</span>
+                        <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
+                          {formatTime(conv.last_message_at)}
+                        </span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-400 mt-0.5">@{conv.displayUsername}</div>
-                    <p className="text-sm text-gray-500 truncate mt-1">{conv.last_message || 'No messages yet'}</p>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      @{conv.displayUsername}
+                    </div>
+                    <p className="text-sm text-gray-500 truncate mt-1">
+                      {typingUsers[conv.id] ? (
+                        <span className="text-primary-600 font-medium">
+                          User is typing...
+                        </span>
+                      ) : (
+                        conv.last_message || 'No messages yet'
+                      )}
+                    </p>
                   </div>
                   {(conv.unread_count || 0) > 0 && (
-                    <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5 flex-shrink-0 font-bold">{conv.unread_count}</span>
+                    <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5 flex-shrink-0 font-bold">
+                      {conv.unread_count}
+                    </span>
                   )}
                 </div>
               </div>
@@ -301,14 +469,30 @@ export function ChatPage() {
         {selectedConv ? (
           <>
             <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-bold">
-                {(selectedConv.displayName || '?')[0].toUpperCase()}
-              </div>
+              {selectedConv.displayAvatar ? (
+                <img
+                  src={selectedConv.displayAvatar}
+                  alt=""
+                  className="w-10 h-10 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-bold">
+                  {(selectedConv.displayName || '?')[0].toUpperCase()}
+                </div>
+              )}
               <div>
-                <h3 className="font-semibold text-gray-900">{selectedConv.displayName}</h3>
+                <h3 className="font-semibold text-gray-900">
+                  {selectedConv.displayName}
+                </h3>
                 <p className="text-xs text-gray-400">
-                  @{selectedConv.displayUsername} · {selectedConv.displayPublicUserId}
+                  @{selectedConv.displayUsername} ·{' '}
+                  {selectedConv.displayPublicUserId}
                 </p>
+                {typingUsers[selectedConv.id] && (
+                  <p className="text-xs text-primary-600 mt-1">
+                    User is typing...
+                  </p>
+                )}
               </div>
             </div>
 
@@ -316,23 +500,45 @@ export function ChatPage() {
               {messages.map(msg => {
                 const isAdmin = msg.sender_username === 'goftegoo_admin';
                 return (
-                  <div key={msg.id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[70%] rounded-xl px-4 py-2 ${
-                      isAdmin
-                        ? 'bg-primary-500 text-white'
-                        : 'bg-gray-100 text-gray-900'
-                    }`}>
+                  <div
+                    key={msg.id}
+                    className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[70%] rounded-xl px-4 py-2 ${
+                        isAdmin
+                          ? 'bg-primary-500 text-white'
+                          : 'bg-gray-100 text-gray-900'
+                      }`}>
                       {!isAdmin && (
-                        <p className="text-xs font-medium text-primary-600 mb-1">{msg.sender_name || msg.sender_username}</p>
+                        <div className="flex items-center gap-2 mb-1">
+                          {msg.sender_avatar ? (
+                            <img
+                              src={msg.sender_avatar}
+                              alt=""
+                              className="w-6 h-6 rounded-full object-cover"
+                            />
+                          ) : null}
+                          <p className="text-xs font-medium text-primary-600">
+                            {msg.sender_name || msg.sender_username}
+                          </p>
+                        </div>
                       )}
-                      <p className="text-sm">{msg.is_deleted ? <em>Deleted</em> : msg.content}</p>
+                      <p className="text-sm">
+                        {msg.is_deleted ? <em>Deleted</em> : msg.content}
+                      </p>
                       <div className="flex items-center justify-end gap-1 mt-1">
-                        <p className={`text-xs ${isAdmin ? 'text-primary-100' : 'text-gray-400'}`}>
+                        <p
+                          className={`text-xs ${isAdmin ? 'text-primary-100' : 'text-gray-400'}`}>
                           {formatTime(msg.created_at)}
                         </p>
                         {isAdmin && (
-                          <span className={`text-xs ${msg.status === 'read' ? 'text-green-300' : msg.status === 'delivered' ? 'text-primary-100' : 'text-primary-200'}`}>
-                            {msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}
+                          <span
+                            className={`text-xs ${msg.status === 'read' ? 'text-green-300' : msg.status === 'delivered' ? 'text-primary-100' : 'text-primary-200'}`}>
+                            {msg.status === 'read'
+                              ? '✓✓'
+                              : msg.status === 'delivered'
+                                ? '✓✓'
+                                : '✓'}
                           </span>
                         )}
                       </div>
@@ -344,10 +550,29 @@ export function ChatPage() {
             </div>
 
             <div className="p-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center gap-2 mb-2">
+                <label className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm cursor-pointer hover:bg-gray-100">
+                  {sendingMedia ? 'Uploading...' : 'Attach file'}
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={handleMedia}
+                    disabled={sendingMedia}
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.zip,.txt"
+                  />
+                </label>
+              </div>
               <div className="flex gap-2">
                 <textarea
                   value={newMessage}
-                  onChange={e => setNewMessage(e.target.value)}
+                  onChange={e => {
+                    setNewMessage(e.target.value);
+                    adminWs.send({
+                      type: 'typing',
+                      conversationId: selectedConv.id,
+                      isTyping: e.target.value.length > 0,
+                    });
+                  }}
                   onKeyDown={handleKeyDown}
                   placeholder="Type a reply..."
                   className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
