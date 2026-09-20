@@ -10,7 +10,7 @@ import {Colors, Spacing, BorderRadius, Shadows, Typography} from '../../core/the
 import {Ionicons} from '@expo/vector-icons';
 import {apiClient} from '../../core/services/apiClient';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import {useTheme} from '../../shell/providers/ThemeProvider';
 import {ThemeToggle} from '../../components/ThemeToggle';
 
