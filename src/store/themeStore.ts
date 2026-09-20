@@ -1,6 +1,6 @@
 import {create} from 'zustand';
 import {Colors, type ThemeColors} from '../core/constants/colors';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
