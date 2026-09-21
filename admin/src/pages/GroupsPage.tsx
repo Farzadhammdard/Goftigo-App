@@ -1,5 +1,6 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useState, useCallback} from 'react';
 import {api} from '../api/client';
+import {PageHeader, Button} from '../components/ui';
 
 export function GroupsPage() {
   const [groups, setGroups] = useState<any[]>([]);
@@ -11,116 +12,225 @@ export function GroupsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({name: '', description: ''});
 
-  const load = async (searchOverride = search) => {
-    setLoading(true);
-    try {
-      const params: Record<string, string> = {page: String(page), pageSize: '20'};
-      if (searchOverride) params.search = searchOverride;
-      const r = await api.getGroups(params);
-      setGroups(r.data || []);
-      setMeta(r.meta);
-    } catch (e) { console.error(e); } finally { setLoading(false); }
-  };
+  const load = useCallback(
+    async (searchOverride = search) => {
+      setLoading(true);
+      try {
+        const params: Record<string, string> = {
+          page: String(page),
+          pageSize: '20',
+        };
+        if (searchOverride) params.search = searchOverride;
+        const r = await api.getGroups(params);
+        setGroups(r.data || []);
+        setMeta(r.meta);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [page, search],
+  );
 
-  useEffect(() => { load(); }, [page]);
+  useEffect(() => {
+    load();
+  }, [page]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    try { await api.createGroup(form); setShowCreate(false); setForm({name: '', description: ''}); load(); } catch (e: any) { alert(e.message); }
+    try {
+      await api.createGroup(form);
+      setShowCreate(false);
+      setForm({name: '', description: ''});
+      load();
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this group?')) return;
-    try { await api.deleteGroup(id); load(); } catch (e: any) { alert(e.message); }
+    try {
+      await api.deleteGroup(id);
+      load();
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try { await api.updateGroup(editing.id, form); setEditing(null); load(); } catch (e: any) { alert(e.message); }
+    try {
+      await api.updateGroup(editing.id, form);
+      setEditing(null);
+      load();
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Groups</h1>
-        <div className="flex gap-2">
-          <form onSubmit={e => { e.preventDefault(); setPage(1); load(search); }} className="flex gap-2">
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search groups"
-              className="px-3 py-2 border rounded-lg text-sm" />
-            <button className="px-3 py-2 border rounded-lg text-sm">Search</button>
-          </form>
-          <button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium">+ Create Group</button>
-        </div>
-      </div>
+    <div className="animate-fade-up">
+      <PageHeader
+        title="Groups"
+        subtitle={meta ? `${meta.total} total groups` : undefined}
+        right={
+          <div className="flex gap-2">
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                setPage(1);
+                load(search);
+              }}
+              className="flex gap-2">
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search groups"
+                className="glass-input w-44"
+              />
+              <Button type="submit" variant="soft">
+                Search
+              </Button>
+            </form>
+            <Button onClick={() => setShowCreate(true)}>+ Create Group</Button>
+          </div>
+        }
+      />
 
-      {showCreate && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-          <h3 className="font-semibold mb-3">New Group</h3>
-          <form onSubmit={handleCreate} className="space-y-3">
-            <input value={form.name} onChange={e => setForm({...form, name: e.target.value})}
-              placeholder="Group name" className="w-full px-3 py-2 border rounded-lg text-sm" required />
-            <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})}
-              placeholder="Description (optional)" className="w-full px-3 py-2 border rounded-lg text-sm" rows={2} />
+      {(showCreate || editing) && (
+        <div className="glass-card mb-6 p-6">
+          <h3 className="mb-3 font-semibold text-slate-900 dark:text-white">
+            {editing ? 'Edit Group' : 'New Group'}
+          </h3>
+          <form
+            onSubmit={editing ? handleEdit : handleCreate}
+            className="space-y-3">
+            <input
+              value={form.name}
+              onChange={e => setForm({...form, name: e.target.value})}
+              placeholder="Group name"
+              className="glass-input"
+              required
+            />
+            <textarea
+              value={form.description}
+              onChange={e => setForm({...form, description: e.target.value})}
+              placeholder="Description (optional)"
+              className="glass-input resize-none"
+              rows={2}
+            />
             <div className="flex gap-2">
-              <button type="submit" className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm">Create</button>
-              <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 bg-gray-100 rounded-lg text-sm">Cancel</button>
+              <Button type="submit">{editing ? 'Save' : 'Create'}</Button>
+              <Button
+                type="button"
+                variant="soft"
+                onClick={() => {
+                  setShowCreate(false);
+                  setEditing(null);
+                }}>
+                Cancel
+              </Button>
             </div>
           </form>
         </div>
       )}
 
-      {editing && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-          <h3 className="font-semibold mb-3">Edit Group</h3>
-          <form onSubmit={handleEdit} className="space-y-3">
-            <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" required />
-            <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm" rows={2} />
-            <div className="flex gap-2">
-              <button type="submit" className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm">Save</button>
-              <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 bg-gray-100 rounded-lg text-sm">Cancel</button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      <div className="bg-white rounded-xl border border-gray-200">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Group</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Members</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Created</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-500">Loading...</td></tr> :
-              groups.length === 0 ? <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-500">No groups</td></tr> :
-              groups.map(g => (
-                <tr key={g.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <div className="text-sm font-medium text-gray-900">{g.name}</div>
-                    {g.description && <div className="text-xs text-gray-500">{g.description}</div>}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{g.memberCount}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{new Date(g.createdAt).toLocaleDateString()}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={() => { setEditing(g); setForm({name: g.name, description: g.description || ''}); setShowCreate(false); }}
-                      className="px-2 py-1 mr-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100">Edit</button>
-                    <button onClick={() => handleDelete(g.id)} className="px-2 py-1 text-xs bg-red-50 text-red-700 rounded hover:bg-red-100">Delete</button>
+      <div className="glass-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="border-b border-white/20 bg-white/20 dark:border-white/10 dark:bg-white/5">
+              <tr>
+                {['Group', 'Members', 'Created', ''].map((h, i) => (
+                  <th
+                    key={i}
+                    className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 ${i === 3 ? 'text-right' : 'text-left'}`}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {loading ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-10 text-center text-slate-400">
+                    Loading…
                   </td>
                 </tr>
-              ))}
-          </tbody>
-        </table>
-        {meta && <div className="p-4 flex items-center justify-between border-t border-gray-200">
-          <span className="text-sm text-gray-500">{meta.total} total groups</span>
-          <div className="flex gap-2">
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50">Prev</button>
-            <span className="px-3 py-1 text-sm">Page {page}</span>
-            <button onClick={() => setPage(p => p + 1)} disabled={!meta.hasMore} className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50">Next</button>
+              ) : groups.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-10 text-center text-slate-400">
+                    No groups
+                  </td>
+                </tr>
+              ) : (
+                groups.map(g => (
+                  <tr
+                    key={g.id}
+                    className="transition hover:bg-white/30 dark:hover:bg-white/5">
+                    <td className="px-4 py-3">
+                      <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                        {g.name}
+                      </div>
+                      {g.description && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          {g.description}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                      {g.memberCount}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                      {new Date(g.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => {
+                          setEditing(g);
+                          setForm({name: g.name, description: g.description || ''});
+                          setShowCreate(false);
+                        }}
+                        className="mr-1 rounded-lg bg-blue-500/15 px-2.5 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-500/25 dark:text-blue-300">
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(g.id)}
+                        className="rounded-lg bg-rose-500/15 px-2.5 py-1 text-xs font-medium text-rose-600 transition hover:bg-rose-500/25 dark:text-rose-300">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        {meta && (
+          <div className="flex items-center justify-between border-t border-white/20 p-4 dark:border-white/10">
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              {meta.total} total groups
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="soft"
+                className="px-3 py-1"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}>
+                Prev
+              </Button>
+              <span className="text-sm text-slate-500">Page {page}</span>
+              <Button
+                variant="soft"
+                className="px-3 py-1"
+                onClick={() => setPage(p => p + 1)}
+                disabled={!meta.hasMore}>
+                Next
+              </Button>
+            </div>
           </div>
-        </div>}
+        )}
       </div>
     </div>
   );

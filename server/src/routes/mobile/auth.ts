@@ -4,6 +4,7 @@ import {queryOne, queryScalar, runStatement} from '../../db/helpers';
 import {generateId, now, hashPassword, comparePassword} from '../../utils/auth';
 import {generateOtp, generateSessionId, generateMobileAccessToken, generateMobileRefreshToken, verifyMobileToken} from '../../utils/mobileAuth';
 import {mobileAuthMiddleware, MobileAuthRequest} from '../../middleware/mobileAuth';
+import {notifyAdmins} from '../../websocket';
 import type {User} from '../../types';
 
 const ADMIN_CONTACT_USERNAME = 'goftegoo_admin';
@@ -176,6 +177,16 @@ router.post('/register', async (req: Request, res: Response) => {
 
     saveDb();
 
+    notifyAdmins({
+      kind: 'user.created',
+      title: 'New user registered',
+      body: `${username} (@${username}) just joined Goftgoo`,
+      icon: '👤',
+      level: 'success',
+      link: '/users',
+      data: {userId, username, displayName: username, publicUserId},
+    });
+
     res.json({
       success: true,
       data: {
@@ -271,6 +282,17 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
       user = queryOne(db, 'SELECT * FROM users WHERE id = ?', [userId]) as User;
 
       await createWelcomeConversation(db, userId, ts);
+
+      saveDb();
+      notifyAdmins({
+        kind: 'user.created',
+        title: 'New user registered',
+        body: `${user.username} joined via phone ${phoneNumber}`,
+        icon: '👤',
+        level: 'success',
+        link: '/users',
+        data: {userId, username: user.username, publicUserId, phoneNumber},
+      });
     }
 
     // Generate tokens

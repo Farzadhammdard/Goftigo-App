@@ -1,8 +1,8 @@
-import {useEffect, useState, useRef, useCallback} from 'react';
+import {useEffect, useState, useCallback} from 'react';
 import {Link} from 'react-router-dom';
 import {api} from '../api/client';
-import {adminWs} from '../services/websocket';
-import {useAuthStore} from '../store/authStore';
+import {useRealtimeStore} from '../store/realtimeStore';
+import {PageHeader, Button, Badge, Avatar} from '../components/ui';
 
 export function UsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -11,81 +11,99 @@ export function UsersPage() {
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const tokenRef = useRef(api.getAccessToken());
+  const eventVersion = useRealtimeStore(s => s.eventVersion);
+  const onlineUsers = useRealtimeStore(s => s.onlineUsers);
+
+  const load = useCallback(
+    async (searchOverride = search, silent = false) => {
+      if (!silent) setLoading(true);
+      try {
+        const params: Record<string, string> = {
+          page: String(page),
+          pageSize: '20',
+        };
+        if (searchOverride) params.search = searchOverride;
+        if (status) params.status = status;
+        const result = await api.getUsers(params);
+        setUsers(result.data);
+        setMeta(result.meta);
+      } catch (e) {
+        console.error(e);
+      }
+      if (!silent) setLoading(false);
+    },
+    [page, search, status],
+  );
 
   useEffect(() => {
-    tokenRef.current = api.getAccessToken();
-  }, [api.getAccessToken()]);
+    load();
+  }, [page, status, load]);
 
-  const load = useCallback(async (searchOverride = search) => {
-    setLoading(true);
-    try {
-      const params: Record<string, string> = {page: String(page), pageSize: '20'};
-      if (searchOverride) params.search = searchOverride;
-      if (status) params.status = status;
-      const result = await api.getUsers(params);
-      setUsers(result.data);
-      setMeta(result.meta);
-    } catch (e) { console.error(e); }
-    setLoading(false);
-  }, [page, search, status]);
-
-  useEffect(() => { load(); }, [page, status, load]);
-
-  // Real-time user status updates
+  // Live: reload when a new user registers anywhere on the platform.
   useEffect(() => {
-    if (!tokenRef.current) return;
-    adminWs.connect(tokenRef.current);
+    if (eventVersion > 0) load(search, true);
+  }, [eventVersion]);
 
-    const handleUserStatus = (data: any) => {
-      setUsers(prev => prev.map(u => {
-        if (u.id === data.userId) {
-          return {...u, isOnline: data.isOnline, lastSeenAt: data.lastSeenAt, status: data.status};
-        }
-        return u;
-      }));
-    };
-
-    adminWs.on('user_status', handleUserStatus);
-    adminWs.on('user_updated', handleUserStatus);
-
-    return () => {
-      adminWs.off('user_status', handleUserStatus);
-      adminWs.off('user_updated', handleUserStatus);
-    };
-  }, []);
-
-  const handleSearch = (e: React.FormEvent) => { e.preventDefault(); setPage(1); load(search); };
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    load(search);
+  };
 
   const handleStatusChange = async (userId: string, newStatus: string) => {
     if (!confirm(`Change user status to ${newStatus}?`)) return;
-    try { await api.updateUserStatus(userId, newStatus); load(); } catch (e: any) { alert(e.message); }
+    try {
+      await api.updateUserStatus(userId, newStatus);
+      load();
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   const handleDelete = async (userId: string) => {
     if (!confirm('Delete this user? This cannot be undone.')) return;
-    try { await api.deleteUser(userId); load(); } catch (e: any) { alert(e.message); }
+    try {
+      await api.deleteUser(userId);
+      load();
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Users</h1>
-        <Link to="/users/new" className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium">
-          + Create User
-        </Link>
-      </div>
+  const isOnline = (u: any) => onlineUsers[u.id] ?? u.isOnline;
 
-      <div className="bg-white rounded-xl border border-gray-200 mb-6">
-        <div className="p-4 flex gap-4 items-center">
-          <form onSubmit={handleSearch} className="flex-1 flex gap-2">
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name, username, phone, ID..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none" />
-            <button type="submit" className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm">Search</button>
+  return (
+    <div className="animate-fade-up">
+      <PageHeader
+        title="Users"
+        subtitle={meta ? `${meta.total} total users` : undefined}
+        right={
+          <Link to="/users/new">
+            <Button>+ Create User</Button>
+          </Link>
+        }
+      />
+
+      <div className="glass-card mb-6 overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <form onSubmit={handleSearch} className="flex flex-1 gap-2">
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by name, username, phone, ID…"
+              className="glass-input flex-1"
+            />
+            <Button type="submit" variant="soft">
+              Search
+            </Button>
           </form>
-          <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+          <select
+            value={status}
+            onChange={e => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+            className="glass-input w-auto">
             <option value="">All Status</option>
             <option value="active">Active</option>
             <option value="suspended">Suspended</option>
@@ -93,80 +111,142 @@ export function UsersPage() {
           </select>
         </div>
 
-        <table className="w-full">
-<thead className="bg-gray-50 border-y border-gray-200">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="border-y border-white/20 bg-white/20 dark:border-white/10 dark:bg-white/5">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">User</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Phone</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">ID</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Online</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Last Seen</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Joined</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
+                {['User', 'Phone', 'Online', 'Status', 'Last Seen', 'Joined', ''].map(
+                  (h, i) => (
+                    <th
+                      key={i}
+                      className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 ${i === 6 ? 'text-right' : 'text-left'}`}>
+                      {h}
+                    </th>
+                  ),
+                )}
               </tr>
             </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">Loading...</td></tr>
-            ) : users.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">No users found</td></tr>
-            ) : users.map(user => (
-              <tr key={user.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3">
-                  <Link to={`/users/${user.id}`} className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-sm font-medium">
-                      {user.displayName?.charAt(0)}
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{user.displayName}</div>
-                      <div className="text-xs text-gray-500">@{user.username}</div>
-                    </div>
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-600">{user.phoneNumber}</td>
-                <td className="px-4 py-3 text-sm text-gray-600 font-mono">{user.id}</td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full ${
-                    user.isOnline ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${user.isOnline ? 'bg-green-500' : 'bg-gray-300'}`}></span>
-                    {user.isOnline ? 'Online' : 'Offline'}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
-                    user.status === 'active' ? 'bg-green-100 text-green-700' :
-                    user.status === 'suspended' ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-red-100 text-red-700'
-                  }`}>{user.status}</span>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-500">{user.lastSeenAt ? new Date(user.lastSeenAt).toLocaleString() : 'Never'}</td>
-                <td className="px-4 py-3 text-sm text-gray-500">{new Date(user.createdAt).toLocaleDateString()}</td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex gap-1 justify-end">
-                    {user.status === 'active' ? (
-                      <button onClick={() => handleStatusChange(user.id, 'suspended')} className="px-2 py-1 text-xs bg-yellow-50 text-yellow-700 rounded hover:bg-yellow-100">Suspend</button>
-                    ) : (
-                      <button onClick={() => handleStatusChange(user.id, 'active')} className="px-2 py-1 text-xs bg-green-50 text-green-700 rounded hover:bg-green-100">Enable</button>
-                    )}
-                    <button onClick={() => handleDelete(user.id)} className="px-2 py-1 text-xs bg-red-50 text-red-700 rounded hover:bg-red-100">Delete</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            <tbody className="divide-y divide-white/10">
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                    Loading…
+                  </td>
+                </tr>
+              ) : users.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                    No users found
+                  </td>
+                </tr>
+              ) : (
+                users.map(user => (
+                  <tr
+                    key={user.id}
+                    className="transition hover:bg-white/30 dark:hover:bg-white/5">
+                    <td className="px-4 py-3">
+                      <Link
+                        to={`/users/${user.id}`}
+                        className="flex items-center gap-3">
+                        <Avatar
+                          src={user.avatarUrl}
+                          name={user.displayName}
+                          size={36}
+                          online={isOnline(user)}
+                        />
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {user.displayName}
+                          </div>
+                          <div className="text-xs text-slate-400">
+                            @{user.username}
+                          </div>
+                        </div>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                      {user.phoneNumber}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge tone={isOnline(user) ? 'green' : 'gray'}>
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${isOnline(user) ? 'bg-emerald-500' : 'bg-slate-400'}`}
+                        />
+                        {isOnline(user) ? 'Online' : 'Offline'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge
+                        tone={
+                          user.status === 'active'
+                            ? 'green'
+                            : user.status === 'suspended'
+                              ? 'yellow'
+                              : 'red'
+                        }>
+                        {user.status}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                      {user.lastSeenAt
+                        ? new Date(user.lastSeenAt).toLocaleString()
+                        : 'Never'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                      {new Date(user.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-1.5">
+                        {user.status === 'active' ? (
+                          <button
+                            onClick={() =>
+                              handleStatusChange(user.id, 'suspended')
+                            }
+                            className="rounded-lg bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-600 transition hover:bg-amber-500/25 dark:text-amber-300">
+                            Suspend
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleStatusChange(user.id, 'active')}
+                            className="rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-600 transition hover:bg-emerald-500/25 dark:text-emerald-300">
+                            Enable
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(user.id)}
+                          className="rounded-lg bg-rose-500/15 px-2.5 py-1 text-xs font-medium text-rose-600 transition hover:bg-rose-500/25 dark:text-rose-300">
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
         {meta && (
-          <div className="p-4 flex items-center justify-between border-t border-gray-200">
-            <span className="text-sm text-gray-500">Showing {users.length} of {meta.total} users</span>
-            <div className="flex gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50">Prev</button>
-              <span className="px-3 py-1 text-sm">Page {page}</span>
-              <button onClick={() => setPage(p => p + 1)} disabled={!meta.hasMore}
-                className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50">Next</button>
+          <div className="flex items-center justify-between border-t border-white/20 p-4 dark:border-white/10">
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              Showing {users.length} of {meta.total} users
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="soft"
+                className="px-3 py-1"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}>
+                Prev
+              </Button>
+              <span className="text-sm text-slate-500">Page {page}</span>
+              <Button
+                variant="soft"
+                className="px-3 py-1"
+                onClick={() => setPage(p => p + 1)}
+                disabled={!meta.hasMore}>
+                Next
+              </Button>
             </div>
           </div>
         )}

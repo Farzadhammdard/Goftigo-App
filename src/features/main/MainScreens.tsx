@@ -31,7 +31,7 @@ import {
 import {Ionicons} from '@expo/vector-icons';
 import {apiClient} from '../../core/services/apiClient';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import {useTheme} from '../../shell/providers/ThemeProvider';
 import {ThemeToggle} from '../../components/ThemeToggle';
 
@@ -171,6 +171,8 @@ function ChatsScreen({navigation}: any) {
       participantName:
         conv.displayName || conv.name || participant?.display_name || 'Chat',
       participantAvatar: conv.displayAvatar || participant?.avatar_url,
+      participantId: participant?.id,
+      participantOnline: !!participant?.is_online,
     });
   };
 
@@ -423,6 +425,8 @@ function NearbyScreen({navigation}: any) {
             conversationId: data.data.conversationId,
             participantName: friend.display_name,
             participantAvatar: friend.avatar_url,
+            participantId: friend.id,
+            participantOnline: !!friend.is_online,
           },
         });
       }
@@ -470,6 +474,8 @@ function NearbyScreen({navigation}: any) {
             conversationId: data.data.conversationId,
             participantName: target.display_name,
             participantAvatar: target.avatar_url,
+            participantId: target.id,
+            participantOnline: !!target.is_online,
           },
         });
       }

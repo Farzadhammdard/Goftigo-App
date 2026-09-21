@@ -15,7 +15,7 @@ import {
   Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import {useAuthStore} from '../../../store/authStore';
 import {Config} from '../../../core/constants/config';
 import {apiClient} from '../../../core/services/apiClient';

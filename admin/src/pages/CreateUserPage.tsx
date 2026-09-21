@@ -1,10 +1,34 @@
 import {useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import {api} from '../api/client';
+import {PageHeader, GlassCard, Button} from '../components/ui';
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
 
 export function CreateUserPage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({phoneNumber: '+93', username: '', displayName: '', employeeId: '', password: ''});
+  const [form, setForm] = useState({
+    phoneNumber: '+93',
+    username: '',
+    displayName: '',
+    employeeId: '',
+    password: '',
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -23,52 +47,76 @@ export function CreateUserPage() {
   };
 
   return (
-    <div className="max-w-lg">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Create User</h1>
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="max-w-lg animate-fade-up">
+      <PageHeader title="Create User" subtitle="Manually add a new account" />
+      <GlassCard className="p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Display Name *</label>
-            <input value={form.displayName} onChange={e => setForm({...form, displayName: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none" required />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Initial Password *</label>
-            <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-              minLength={4} required />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Username *</label>
-            <input value={form.username} onChange={e => setForm({...form, username: e.target.value.replace(/[^a-zA-Z0-9_]/g, '')})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-              placeholder="username" required />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
-            <input value={form.phoneNumber} onChange={e => setForm({...form, phoneNumber: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-              placeholder="+93XXXXXXXXX" required />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
-            <input value={form.employeeId} onChange={e => setForm({...form, employeeId: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-              placeholder="EMP-XXX" />
-          </div>
-          {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>}
+          <Field label="Display Name *">
+            <input
+              value={form.displayName}
+              onChange={e => setForm({...form, displayName: e.target.value})}
+              className="glass-input"
+              required
+            />
+          </Field>
+          <Field label="Initial Password *">
+            <input
+              type="password"
+              value={form.password}
+              onChange={e => setForm({...form, password: e.target.value})}
+              className="glass-input"
+              minLength={4}
+              required
+            />
+          </Field>
+          <Field label="Username *">
+            <input
+              value={form.username}
+              onChange={e =>
+                setForm({
+                  ...form,
+                  username: e.target.value.replace(/[^a-zA-Z0-9_]/g, ''),
+                })
+              }
+              className="glass-input"
+              placeholder="username"
+              required
+            />
+          </Field>
+          <Field label="Phone Number *">
+            <input
+              value={form.phoneNumber}
+              onChange={e => setForm({...form, phoneNumber: e.target.value})}
+              className="glass-input"
+              placeholder="+93XXXXXXXXX"
+              required
+            />
+          </Field>
+          <Field label="Employee ID">
+            <input
+              value={form.employeeId}
+              onChange={e => setForm({...form, employeeId: e.target.value})}
+              className="glass-input"
+              placeholder="EMP-XXX"
+            />
+          </Field>
+
+          {error && (
+            <div className="rounded-xl border border-rose-400/40 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-300">
+              {error}
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={loading}
-              className="px-6 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-300 text-white rounded-lg text-sm font-medium">
-              {loading ? 'Creating...' : 'Create User'}
-            </button>
-            <button type="button" onClick={() => navigate('/users')}
-              className="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm">
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Creating…' : 'Create User'}
+            </Button>
+            <Button type="button" variant="soft" onClick={() => navigate('/users')}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
+      </GlassCard>
     </div>
   );
 }

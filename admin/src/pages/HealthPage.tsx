@@ -1,39 +1,69 @@
 import {useEffect, useState} from 'react';
 import {api} from '../api/client';
+import {PageHeader, GlassCard, Badge} from '../components/ui';
 
 export function HealthPage() {
   const [health, setHealth] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getHealth().then(setHealth).catch(console.error).finally(() => setLoading(false));
+    const load = () =>
+      api
+        .getHealth()
+        .then(setHealth)
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
   }, []);
 
-  if (loading) return <div className="text-gray-500">Loading...</div>;
+  if (loading && !health)
+    return (
+      <div>
+        <PageHeader title="System Health" />
+        <div className="skeleton h-64 max-w-2xl rounded-2xl" />
+      </div>
+    );
+
+  const healthy = health?.overallStatus === 'healthy';
 
   return (
-    <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">System Health</h1>
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className={`text-lg font-semibold ${health?.overallStatus === 'healthy' ? 'text-green-600' : 'text-yellow-600'}`}>
-            {health?.overallStatus === 'healthy' ? '🟢 System Healthy' : '🟡 Partial'}
-          </div>
-        </div>
+    <div className="max-w-2xl animate-fade-up">
+      <PageHeader
+        title="System Health"
+        subtitle="Auto-refreshes every 15 seconds"
+        right={
+          <Badge tone={healthy ? 'green' : 'yellow'}>
+            {healthy ? '🟢 Healthy' : '🟡 Partial'}
+          </Badge>
+        }
+      />
+      <GlassCard className="p-6">
         <div className="space-y-3">
           {health?.checks?.map((check: any) => (
-            <div key={check.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div
+              key={check.name}
+              className="glass flex items-center justify-between rounded-xl p-3.5">
               <div>
-                <div className="text-sm font-medium text-gray-900">{check.name}</div>
-                <div className="text-xs text-gray-500">{check.message}</div>
+                <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                  {check.name}
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  {check.message}
+                </div>
               </div>
               <span className="text-lg">
-                {check.status === 'ok' ? '🟢' : check.status === 'warning' ? '🟡' : '🔴'}
+                {check.status === 'ok'
+                  ? '🟢'
+                  : check.status === 'warning'
+                    ? '🟡'
+                    : '🔴'}
               </span>
             </div>
           ))}
         </div>
-      </div>
+      </GlassCard>
     </div>
   );
 }

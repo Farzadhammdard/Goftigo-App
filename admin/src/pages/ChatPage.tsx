@@ -1,6 +1,8 @@
 import {useState, useEffect, useRef, useCallback} from 'react';
 import {api} from '../api/client';
 import {adminWs} from '../services/websocket';
+import {useRealtimeStore} from '../store/realtimeStore';
+import {Avatar} from '../components/ui';
 
 interface Conversation {
   id: string;
@@ -32,21 +34,6 @@ interface Message {
   sender_avatar: string | null;
 }
 
-async function getAdminUserToken(): Promise<string | null> {
-  try {
-    const res = await fetch('/api/admin/chat/admin-ws-token', {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('admin_access')}`,
-        'Content-Type': 'application/json',
-      },
-    });
-    const data = await res.json();
-    return data.data?.token || null;
-  } catch {
-    return null;
-  }
-}
-
 export function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -55,37 +42,20 @@ export function ChatPage() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [wsConnected, setWsConnected] = useState(false);
+  const wsConnected = useRealtimeStore(s => s.connected);
+  const onlineUsers = useRealtimeStore(s => s.onlineUsers);
   const [sendingMedia, setSendingMedia] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const selectedConvRef = useRef<Conversation | null>(null);
   selectedConvRef.current = selectedConv;
 
-  // Connect WebSocket
+  // The global realtime connection is owned by <Layout>; here we only react.
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const token = await getAdminUserToken();
-      if (token && mounted) {
-        adminWs.connect(token);
-      }
-    })();
-    return () => {
-      mounted = false;
-      adminWs.disconnect();
-    };
-  }, []);
-
-  useEffect(() => {
-    const onConnected = () => setWsConnected(true);
-    const onDisconnected = () => setWsConnected(false);
-
+    const onConnected = () => loadConversations();
     adminWs.on('connected', onConnected);
-    adminWs.on('disconnected', onDisconnected);
     return () => {
       adminWs.off('connected', onConnected);
-      adminWs.off('disconnected', onDisconnected);
     };
   }, []);
 
@@ -336,116 +306,117 @@ export function ChatPage() {
     return d.toLocaleDateString();
   };
 
+  const isConvOnline = (conv: Conversation) =>
+    onlineUsers[conv.displayUserId] ??
+    (conv as any).participants?.some(
+      (p: any) => p.is_online === 1 && p.username !== 'goftegoo_admin',
+    );
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-white rounded-lg shadow overflow-hidden">
+    <div className="glass-card flex h-[calc(100vh-7rem)] overflow-hidden animate-fade-up">
       {/* Conversation List */}
-      <div className="w-80 border-r border-gray-200 flex flex-col">
-        <div className="p-4 border-b border-gray-200 bg-gray-50">
+      <div className="flex w-80 shrink-0 flex-col border-r border-white/20 dark:border-white/10">
+        <div className="border-b border-white/20 p-4 dark:border-white/10">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-800">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
               Support Chat
             </h2>
             <span
-              className={`text-xs px-2 py-0.5 rounded-full ${wsConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-              {wsConnected ? '🟢 Live' : '🔴 Offline'}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                wsConnected
+                  ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+                  : 'border-rose-400/40 bg-rose-500/10 text-rose-600 dark:text-rose-300'
+              }`}>
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${wsConnected ? 'live-dot bg-emerald-500 text-emerald-500' : 'bg-rose-500'}`}
+              />
+              {wsConnected ? 'Live' : 'Offline'}
             </span>
           </div>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {conversations.length} conversations
           </p>
         </div>
+
         <div className="flex-1 overflow-y-auto">
-          <div className="p-3 border-b border-gray-200 bg-white">
-            <p className="text-xs font-semibold uppercase text-gray-500 mb-2">
+          <div className="border-b border-white/20 p-3 dark:border-white/10">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
               All users
             </p>
-            {users.map(user => {
-              const conversation = conversations.find(
-                conv => conv.displayUserId === user.id,
-              );
-              return (
-                <button
-                  key={user.id}
-                  onClick={() =>
-                    conversation
-                      ? setSelectedConv(conversation)
-                      : openUserChat(user)
-                  }
-                  className="w-full flex items-center gap-2 p-2 text-left hover:bg-gray-50 rounded">
-                  {user.avatarUrl ? (
-                    <img
+            <div className="max-h-40 space-y-0.5 overflow-y-auto">
+              {users.map(user => {
+                const conversation = conversations.find(
+                  conv => conv.displayUserId === user.id,
+                );
+                return (
+                  <button
+                    key={user.id}
+                    onClick={() =>
+                      conversation
+                        ? setSelectedConv(conversation)
+                        : openUserChat(user)
+                    }
+                    className="flex w-full items-center gap-2 rounded-xl p-2 text-left transition hover:bg-white/50 dark:hover:bg-white/5">
+                    <Avatar
                       src={user.avatarUrl}
-                      alt=""
-                      className="w-8 h-8 rounded-full object-cover"
+                      name={user.displayName || user.username}
+                      size={32}
+                      online={!!onlineUsers[user.id]}
                     />
-                  ) : (
-                    <span className="w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs">
-                      {(user.displayName || '?')[0]}
+                    <span className="truncate text-sm text-slate-700 dark:text-slate-200">
+                      {user.displayName || user.username}
                     </span>
-                  )}
-                  <span className="text-sm truncate">
-                    {user.displayName || user.username}
-                  </span>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
           {loading ? (
-            <div className="p-4 text-center text-gray-400">Loading...</div>
+            <div className="space-y-2 p-3">
+              {Array.from({length: 5}).map((_, i) => (
+                <div key={i} className="skeleton h-16 rounded-2xl" />
+              ))}
+            </div>
           ) : conversations.length === 0 ? (
-            <div className="p-4 text-center text-gray-400">
+            <div className="p-6 text-center text-sm text-slate-400">
               No conversations yet
             </div>
           ) : (
             conversations.map(conv => (
               <div
                 key={conv.id}
-                onClick={() => {
-                  setSelectedConv(conv);
-                }}
-                className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition ${
+                onClick={() => setSelectedConv(conv)}
+                className={`cursor-pointer border-b border-white/10 p-3.5 transition dark:border-white/5 ${
                   selectedConv?.id === conv.id
-                    ? 'bg-indigo-50 border-l-4 border-l-indigo-500'
-                    : ''
+                    ? 'bg-gradient-to-r from-blue-500/15 to-indigo-500/10'
+                    : 'hover:bg-white/40 dark:hover:bg-white/5'
                 }`}>
                 <div className="flex items-center gap-3">
-                  <div className="relative">
-                    {conv.displayAvatar ? (
-                      <img
-                        src={conv.displayAvatar}
-                        alt=""
-                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                        {(conv.displayName || '?')[0].toUpperCase()}
-                      </div>
-                    )}
-                    {(conv as any).participants?.some(
-                      (p: any) =>
-                        p.is_online === 1 && p.username !== 'goftegoo_admin',
-                    ) && (
-                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline">
-                      <span className="font-medium text-gray-900 truncate">
+                  <Avatar
+                    src={conv.displayAvatar}
+                    name={conv.displayName}
+                    size={42}
+                    online={isConvOnline(conv)}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between">
+                      <span className="truncate font-semibold text-slate-900 dark:text-white">
                         {conv.displayName}
                       </span>
                       {conv.last_message_at && (
-                        <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
+                        <span className="ml-2 shrink-0 text-[11px] text-slate-400">
                           {formatTime(conv.last_message_at)}
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-400 mt-0.5">
+                    <div className="text-xs text-slate-400">
                       @{conv.displayUsername}
                     </div>
-                    <p className="text-sm text-gray-500 truncate mt-1">
+                    <p className="mt-0.5 truncate text-sm text-slate-500 dark:text-slate-400">
                       {typingUsers[conv.id] ? (
-                        <span className="text-primary-600 font-medium">
-                          User is typing...
+                        <span className="font-medium text-blue-500">
+                          typing…
                         </span>
                       ) : (
                         conv.last_message || 'No messages yet'
@@ -453,7 +424,7 @@ export function ChatPage() {
                     </p>
                   </div>
                   {(conv.unread_count || 0) > 0 && (
-                    <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5 flex-shrink-0 font-bold">
+                    <span className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-rose-500 px-1.5 text-xs font-bold text-white">
                       {conv.unread_count}
                     </span>
                   )}
@@ -465,38 +436,31 @@ export function ChatPage() {
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex flex-1 flex-col">
         {selectedConv ? (
           <>
-            <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center gap-3">
-              {selectedConv.displayAvatar ? (
-                <img
-                  src={selectedConv.displayAvatar}
-                  alt=""
-                  className="w-10 h-10 rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-bold">
-                  {(selectedConv.displayName || '?')[0].toUpperCase()}
-                </div>
-              )}
+            <div className="flex items-center gap-3 border-b border-white/20 p-4 dark:border-white/10">
+              <Avatar
+                src={selectedConv.displayAvatar}
+                name={selectedConv.displayName}
+                size={42}
+                online={isConvOnline(selectedConv)}
+              />
               <div>
-                <h3 className="font-semibold text-gray-900">
+                <h3 className="font-semibold text-slate-900 dark:text-white">
                   {selectedConv.displayName}
                 </h3>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-slate-400">
                   @{selectedConv.displayUsername} ·{' '}
                   {selectedConv.displayPublicUserId}
                 </p>
                 {typingUsers[selectedConv.id] && (
-                  <p className="text-xs text-primary-600 mt-1">
-                    User is typing...
-                  </p>
+                  <p className="mt-0.5 text-xs text-blue-500">typing…</p>
                 )}
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 space-y-3 overflow-y-auto p-4">
               {messages.map(msg => {
                 const isAdmin = msg.sender_username === 'goftegoo_admin';
                 return (
@@ -504,41 +468,25 @@ export function ChatPage() {
                     key={msg.id}
                     className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
                     <div
-                      className={`max-w-[70%] rounded-xl px-4 py-2 ${
+                      className={`max-w-[70%] rounded-2xl px-4 py-2 shadow-md ${
                         isAdmin
-                          ? 'bg-primary-500 text-white'
-                          : 'bg-gray-100 text-gray-900'
+                          ? 'rounded-br-sm bg-gradient-to-br from-blue-600 to-indigo-600 text-white'
+                          : 'rounded-bl-sm bg-white/70 text-slate-900 dark:bg-white/10 dark:text-slate-100'
                       }`}>
-                      {!isAdmin && (
-                        <div className="flex items-center gap-2 mb-1">
-                          {msg.sender_avatar ? (
-                            <img
-                              src={msg.sender_avatar}
-                              alt=""
-                              className="w-6 h-6 rounded-full object-cover"
-                            />
-                          ) : null}
-                          <p className="text-xs font-medium text-primary-600">
-                            {msg.sender_name || msg.sender_username}
-                          </p>
-                        </div>
-                      )}
-                      <p className="text-sm">
+                      <p className="text-sm leading-relaxed">
                         {msg.is_deleted ? <em>Deleted</em> : msg.content}
                       </p>
-                      <div className="flex items-center justify-end gap-1 mt-1">
+                      <div className="mt-1 flex items-center justify-end gap-1">
                         <p
-                          className={`text-xs ${isAdmin ? 'text-primary-100' : 'text-gray-400'}`}>
+                          className={`text-[10px] ${isAdmin ? 'text-blue-100' : 'text-slate-400'}`}>
                           {formatTime(msg.created_at)}
                         </p>
                         {isAdmin && (
                           <span
-                            className={`text-xs ${msg.status === 'read' ? 'text-green-300' : msg.status === 'delivered' ? 'text-primary-100' : 'text-primary-200'}`}>
-                            {msg.status === 'read'
+                            className={`text-[10px] ${msg.status === 'read' ? 'text-emerald-300' : 'text-blue-100'}`}>
+                            {msg.status === 'read' || msg.status === 'delivered'
                               ? '✓✓'
-                              : msg.status === 'delivered'
-                                ? '✓✓'
-                                : '✓'}
+                              : '✓'}
                           </span>
                         )}
                       </div>
@@ -549,10 +497,10 @@ export function ChatPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="p-4 border-t border-gray-200 bg-gray-50">
-              <div className="flex items-center gap-2 mb-2">
-                <label className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm cursor-pointer hover:bg-gray-100">
-                  {sendingMedia ? 'Uploading...' : 'Attach file'}
+            <div className="border-t border-white/20 p-4 dark:border-white/10">
+              <div className="mb-2 flex items-center gap-2">
+                <label className="glass cursor-pointer rounded-xl px-3 py-2 text-sm text-slate-700 transition hover:bg-white/80 dark:text-slate-200 dark:hover:bg-white/10">
+                  {sendingMedia ? 'Uploading…' : '📎 Attach file'}
                   <input
                     type="file"
                     className="hidden"
@@ -574,25 +522,27 @@ export function ChatPage() {
                     });
                   }}
                   onKeyDown={handleKeyDown}
-                  placeholder="Type a reply..."
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Type a reply…"
+                  className="glass-input flex-1 resize-none"
                   rows={2}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!newMessage.trim() || sending}
-                  className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed self-end">
-                  {sending ? 'Sending...' : 'Send'}
+                  className="self-end rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition hover:from-blue-500 hover:to-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
+                  {sending ? '…' : 'Send'}
                 </button>
               </div>
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400">
+          <div className="flex flex-1 items-center justify-center text-slate-400">
             <div className="text-center">
-              <p className="text-4xl mb-2">💬</p>
-              <p className="text-lg">Select a conversation</p>
-              <p className="text-sm mt-1">Messages appear in real-time</p>
+              <p className="mb-2 text-5xl">💬</p>
+              <p className="text-lg font-medium text-slate-600 dark:text-slate-300">
+                Select a conversation
+              </p>
+              <p className="mt-1 text-sm">Messages appear in real-time</p>
             </div>
           </div>
         )}

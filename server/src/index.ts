@@ -16,6 +16,7 @@ import reportRoutes from './routes/admin/reports';
 import systemRoutes from './routes/admin/system';
 import adminRoutes from './routes/admin/admins';
 import adminChatRoutes from './routes/admin/chat';
+import otpRoutes from './routes/admin/otp';
 
 // Mobile API routes
 import mobileAuthRoutes from './routes/mobile/auth';
@@ -48,6 +49,7 @@ app.use('/api/admin/reports', reportRoutes);
 app.use('/api/admin/system', systemRoutes);
 app.use('/api/admin/admins', adminRoutes);
 app.use('/api/admin/chat', adminChatRoutes);
+app.use('/api/admin/otp', otpRoutes);
 
 // Mobile API routes
 app.use('/api/auth', mobileAuthRoutes);
@@ -173,7 +175,15 @@ async function seedTestUsers() {
 
 async function seedAdminContact() {
   const db = await getDb();
-  const existing = queryOne(db, "SELECT id FROM users WHERE username = 'goftegoo_admin'");
+  const existing = queryOne(db, "SELECT id, status FROM users WHERE username = 'goftegoo_admin'") as {id: string; status: string} | undefined;
+
+  if (existing && existing.status !== 'active') {
+    // Restore an admin contact that was (accidentally) soft-deleted; the admin
+    // panel cannot connect as this user unless the account is active.
+    runStatement(db, "UPDATE users SET status = 'active', is_online = 0 WHERE id = ?", [existing.id]);
+    console.log('Admin contact user re-activated');
+    return;
+  }
 
   if (!existing) {
     const id = `GFT-${generateId().slice(0, 8).toUpperCase()}`;

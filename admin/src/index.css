@@ -2,7 +2,223 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-base: #eef2ff;
+  --bg-blob-1: rgba(99, 102, 241, 0.35);
+  --bg-blob-2: rgba(236, 72, 153, 0.28);
+  --bg-blob-3: rgba(14, 165, 233, 0.28);
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-bg-strong: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
+  --text: #0f172a;
+  --text-muted: #475569;
+  --ring: rgba(37, 99, 235, 0.35);
+}
+
+.dark {
+  --bg-base: #070b18;
+  --bg-blob-1: rgba(79, 70, 229, 0.4);
+  --bg-blob-2: rgba(14, 165, 233, 0.25);
+  --bg-blob-3: rgba(217, 70, 239, 0.22);
+  --glass-bg: rgba(255, 255, 255, 0.06);
+  --glass-bg-strong: rgba(17, 24, 39, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --text: #e6edf7;
+  --text-muted: #94a3b8;
+  --ring: rgba(96, 165, 250, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    sans-serif;
+  color: var(--text);
+  background: var(--bg-base);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.4s ease, color 0.3s ease;
+}
+
+/* ---- Animated gradient mesh backdrop ---- */
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--bg-base);
+}
+.app-bg .blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.9;
+}
+.app-bg .blob-1 {
+  width: 42rem;
+  height: 42rem;
+  top: -12rem;
+  left: -8rem;
+  background: var(--bg-blob-1);
+  animation: blob 20s ease-in-out infinite;
+}
+.app-bg .blob-2 {
+  width: 34rem;
+  height: 34rem;
+  bottom: -10rem;
+  right: -6rem;
+  background: var(--bg-blob-2);
+  animation: blob 24s ease-in-out infinite reverse;
+}
+.app-bg .blob-3 {
+  width: 28rem;
+  height: 28rem;
+  top: 30%;
+  left: 45%;
+  background: var(--bg-blob-3);
+  animation: blob 28s ease-in-out infinite;
+}
+
+/* ---- Glass surfaces ---- */
+@layer components {
+  .glass {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+  }
+  .glass-strong {
+    background: var(--glass-bg-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+  }
+  .glass-card {
+    @apply glass rounded-2xl;
+  }
+  .glass-hover {
+    @apply transition-all duration-200;
+  }
+  .glass-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 40px rgba(31, 38, 135, 0.22);
+  }
+  .glass-input {
+    @apply w-full rounded-xl px-3 py-2 text-sm outline-none transition;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text);
+  }
+  .glass-input::placeholder {
+    color: var(--text-muted);
+  }
+  .glass-input:focus {
+    border-color: transparent;
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+  .muted {
+    color: var(--text-muted);
+  }
+  .nav-link {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150;
+    color: var(--text-muted);
+  }
+  .nav-link:hover {
+    background: var(--glass-bg);
+    color: var(--text);
+  }
+  .nav-link.active {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.9), rgba(99, 102, 241, 0.85));
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+  }
+}
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--glass-border);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+  background-clip: content-box;
+}
+
+/* ---- Misc ---- */
+.live-dot {
+  position: relative;
+}
+.live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+  opacity: 0.6;
+}
+@keyframes ping {
+  75%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--glass-bg);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.25),
+    transparent
+  );
+  animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes blob {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -40px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.95);
+  }
 }

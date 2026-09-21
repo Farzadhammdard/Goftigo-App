@@ -3,6 +3,7 @@ import {getDb, saveDb} from '../../db/connection';
 import {queryOne, queryAll, queryScalar, runStatement} from '../../db/helpers';
 import {generateId, now} from '../../utils/auth';
 import {mobileAuthMiddleware, MobileAuthRequest} from '../../middleware/mobileAuth';
+import {notifyAdmins} from '../../websocket';
 
 const router = Router();
 
@@ -122,6 +123,15 @@ router.post('/', mobileAuthMiddleware, async (req: MobileAuthRequest, res: Respo
       [postId, userId, imageUrl || null, caption || null, 'pending', ts, ts]);
     saveDb();
     const post = queryOne(db, `SELECT p.*, u.username as author_username, u.display_name as author_name, u.avatar_url as author_avatar FROM posts p INNER JOIN users u ON p.author_id = u.id WHERE p.id = ?`, [postId]);
+    notifyAdmins({
+      kind: 'post.created',
+      title: 'New post pending review',
+      body: `${(post as any)?.author_name || 'A user'} submitted a new post`,
+      icon: '📰',
+      level: 'warning',
+      link: '/posts',
+      data: {postId, status: 'pending', caption: caption || null, imageUrl: imageUrl || null, author: (post as any)?.author_username},
+    });
     res.json({success: true, data: {post}});
   } catch (error) {
     res.status(500).json({success: false, error: {code: 'INTERNAL', message: 'Failed to create post'}});

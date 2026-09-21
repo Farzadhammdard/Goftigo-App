@@ -1,131 +1,110 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useState, useCallback} from 'react';
 import {api} from '../api/client';
-
-function StatCard({
-  label,
-  value,
-  icon,
-  color = 'primary',
-}: {
-  label: string;
-  value: string | number;
-  icon: string;
-  color?: string;
-}) {
-  const colors: Record<string, string> = {
-    primary: 'bg-primary-50 text-primary-600',
-    green: 'bg-green-50 text-green-600',
-    yellow: 'bg-yellow-50 text-yellow-600',
-    red: 'bg-red-50 text-red-600',
-    purple: 'bg-primary-50 text-primary-600',
-  };
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <div className="flex items-center gap-3">
-        <div
-          className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg ${colors[color]}`}>
-          {icon}
-        </div>
-        <div>
-          <div className="text-2xl font-bold text-gray-900">{value}</div>
-          <div className="text-sm text-gray-500">{label}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
+import {useRealtimeStore} from '../store/realtimeStore';
+import {StatCard, GlassCard, PageHeader, Badge} from '../components/ui';
 
 export function DashboardPage() {
   const [stats, setStats] = useState<any>(null);
   const [health, setHealth] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const eventVersion = useRealtimeStore(s => s.eventVersion);
+  const presenceVersion = useRealtimeStore(s => s.presenceVersion);
+  const lastEvent = useRealtimeStore(s => s.lastEvent);
 
-  useEffect(() => {
-    Promise.allSettled([api.getStats(), api.getHealth()])
-      .then(([statsResult, healthResult]) => {
-        if (statsResult.status === 'fulfilled') setStats(statsResult.value);
-        if (healthResult.status === 'fulfilled') setHealth(healthResult.value);
-      })
-      .finally(() => setLoading(false));
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    const [statsResult, healthResult] = await Promise.allSettled([
+      api.getStats(),
+      api.getHealth(),
+    ]);
+    if (statsResult.status === 'fulfilled') setStats(statsResult.value);
+    if (healthResult.status === 'fulfilled') setHealth(healthResult.value);
+    if (!silent) setLoading(false);
   }, []);
 
-  if (loading) return <div className="text-gray-500">Loading dashboard...</div>;
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Live refresh whenever anything happens across the platform.
+  useEffect(() => {
+    if (eventVersion > 0) load(true);
+  }, [eventVersion, load]);
+
+  useEffect(() => {
+    if (presenceVersion > 0) load(true);
+  }, [presenceVersion, load]);
+
+  if (loading && !stats) {
+    return (
+      <div>
+        <PageHeader title="Dashboard" subtitle="Live overview of Goftgoo" />
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          {Array.from({length: 8}).map((_, i) => (
+            <div key={i} className="skeleton h-24 rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   if (!stats)
-    return <div className="text-red-500">Failed to load dashboard</div>;
+    return (
+      <div className="text-rose-500">Failed to load dashboard metrics.</div>
+    );
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Users" value={stats.users?.total || 0} icon="👥" />
-        <StatCard
-          label="Online"
-          value={stats.users?.online || 0}
-          icon="🟢"
-          color="green"
-        />
-        <StatCard
-          label="Messages Today"
-          value={stats.messages?.today || 0}
-          icon="💬"
-        />
-        <StatCard
-          label="New Users Today"
-          value={stats.users?.newToday || 0}
-          icon="🆕"
-          color="green"
-        />
-        <StatCard label="Groups" value={stats.groups?.total || 0} icon="👪" />
-        <StatCard
-          label="Posts"
-          value={stats.posts?.total || 0}
-          icon="📰"
-          color="purple"
-        />
-        <StatCard
-          label="Pending Posts"
-          value={stats.posts?.pending || 0}
-          icon="⏳"
-          color="yellow"
-        />
-        <StatCard
-          label="Friend Requests"
-          value={stats.friends?.pendingRequests || 0}
-          icon="🤝"
-          color="purple"
-        />
-        <StatCard
-          label="Suspended"
-          value={stats.users?.suspended || 0}
-          icon="🚫"
-          color="red"
-        />
-        <StatCard
-          label="Nearby Active"
-          value={stats.nearby?.active || 0}
-          icon="📡"
-          color="yellow"
-        />
-        <StatCard
-          label="Files Today"
-          value={stats.messages?.filesToday || 0}
-          icon="📁"
-          color="purple"
-        />
+    <div className="animate-fade-up">
+      <PageHeader
+        title="Dashboard"
+        subtitle="Live overview — updates automatically as things happen"
+        right={
+          lastEvent ? (
+            <Badge tone="blue">
+              <span className="live-dot mr-1 inline-block h-1.5 w-1.5 rounded-full bg-blue-500 text-blue-500" />
+              Last: {lastEvent.title}
+            </Badge>
+          ) : null
+        }
+      />
+
+      <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatCard label="Total Users" value={stats.users?.total || 0} icon="👥" color="blue" />
+        <StatCard label="Online Now" value={stats.users?.online || 0} icon="🟢" color="green" />
+        <StatCard label="Messages Today" value={stats.messages?.today || 0} icon="💬" color="purple" />
+        <StatCard label="New Users Today" value={stats.users?.newToday || 0} icon="🆕" color="green" />
+        <StatCard label="Groups" value={stats.groups?.total || 0} icon="👪" color="blue" />
+        <StatCard label="Posts" value={stats.posts?.total || 0} icon="📰" color="purple" />
+        <StatCard label="Pending Posts" value={stats.posts?.pending || 0} icon="⏳" color="yellow" />
+        <StatCard label="Friend Requests" value={stats.friends?.pendingRequests || 0} icon="🤝" color="purple" />
+        <StatCard label="Suspended" value={stats.users?.suspended || 0} icon="🚫" color="red" />
+        <StatCard label="Nearby Active" value={stats.nearby?.active || 0} icon="📡" color="yellow" />
+        <StatCard label="Files Today" value={stats.messages?.filesToday || 0} icon="📁" color="purple" />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          System Health
-        </h2>
-        <div className="space-y-2">
+      <GlassCard className="p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+            System Health
+          </h2>
+          <span className="text-xs text-slate-400">auto-refreshing</span>
+        </div>
+        <div className="space-y-1">
           {health?.checks?.map((check: any) => (
             <div
               key={check.name}
-              className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-              <span className="text-sm text-gray-700">{check.name}</span>
+              className="flex items-center justify-between rounded-xl px-3 py-2.5 transition hover:bg-white/40 dark:hover:bg-white/5">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                {check.name}
+              </span>
               <span
-                className={`text-sm font-medium ${check.status === 'ok' ? 'text-green-600' : check.status === 'warning' ? 'text-yellow-600' : 'text-red-600'}`}>
+                className={`text-sm ${
+                  check.status === 'ok'
+                    ? 'text-emerald-500'
+                    : check.status === 'warning'
+                      ? 'text-amber-500'
+                      : 'text-rose-500'
+                }`}>
                 {check.status === 'ok'
                   ? '🟢'
                   : check.status === 'warning'
@@ -136,7 +115,7 @@ export function DashboardPage() {
             </div>
           ))}
         </div>
-      </div>
+      </GlassCard>
     </div>
   );
 }

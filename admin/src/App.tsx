@@ -13,6 +13,7 @@ import {SettingsPage} from './pages/SettingsPage';
 import {AdminsPage} from './pages/AdminsPage';
 import {HealthPage} from './pages/HealthPage';
 import {ChatPage} from './pages/ChatPage';
+import {OtpPage} from './pages/OtpPage';
 
 function ProtectedRoute({children}: {children: React.ReactNode}) {
   const {isAuthenticated, isLoading} = useAuthStore();
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="groups" element={<GroupsPage />} />
           <Route path="posts" element={<PostsPage />} />
           <Route path="health" element={<HealthPage />} />
+          <Route path="otp" element={<OtpPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="admins" element={<AdminsPage />} />
           <Route path="chat" element={<ChatPage />} />

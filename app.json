@@ -23,7 +23,6 @@
       },
       "usesCleartextTraffic": true,
       "package": "com.goftgoo.app",
-      "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
@@ -52,7 +51,10 @@
       "expo-asset",
       "expo-font",
       "expo-image-picker",
-      "expo-document-picker"
+      "expo-document-picker",
+      "expo-audio",
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "scheme": "goftgoo",
     "extra": {

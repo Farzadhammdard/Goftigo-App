@@ -22,6 +22,11 @@ interface AuthenticatedSocket {
 const clients = new Map<string, AuthenticatedSocket[]>();
 const adminClients: AuthenticatedSocket[] = [];
 
+// The admin panel connects using the `goftegoo_admin` user's mobile token, so its
+// sockets live in the `clients` map rather than `adminClients`. We cache that id
+// so admin-wide broadcasts reach the panel without a DB read on every event.
+let adminContactId: string | null = null;
+
 export function setupWebSocket(server: HttpServer): void {
   const wss = new WebSocketServer({server, path: '/ws'});
 
@@ -151,10 +156,55 @@ export function broadcastUserStatus(userId: string, isOnline: boolean): void {
     }
 
     // Notify admins
-    const data = JSON.stringify({type: 'user_status', userId, isOnline, lastSeenAt: now(), status});
-    adminClients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) client.send(data);
-    });
+    broadcastToAdmins({type: 'user_status', userId, isOnline, lastSeenAt: now(), status});
+  });
+}
+
+/**
+ * Deliver an event to every connected admin surface: JWT-authenticated admins
+ * and the admin panel (which is connected as the `goftegoo_admin` user).
+ */
+export function broadcastToAdmins(message: any): void {
+  const data = JSON.stringify(message);
+  adminClients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) client.send(data);
+  });
+
+  if (adminContactId) {
+    sendToUser(adminContactId, message);
+    return;
+  }
+  getDb()
+    .then(db => {
+      const admin = queryOne(
+        db,
+        "SELECT id FROM users WHERE username = 'goftegoo_admin'",
+      ) as {id: string} | undefined;
+      if (admin) {
+        adminContactId = admin.id;
+        sendToUser(admin.id, message);
+      }
+    })
+    .catch(() => {});
+}
+
+/** Convenience helper to push a rich notification/activity event to admins. */
+export function notifyAdmins(event: {
+  kind: string;
+  title: string;
+  body: string;
+  icon?: string;
+  level?: 'info' | 'success' | 'warning' | 'danger';
+  link?: string;
+  data?: any;
+}): void {
+  broadcastToAdmins({
+    type: 'admin:event',
+    at: now(),
+    level: 'info',
+    icon: '🔔',
+    link: '',
+    ...event,
   });
 }
 

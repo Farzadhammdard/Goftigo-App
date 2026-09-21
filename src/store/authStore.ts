@@ -1,5 +1,5 @@
 import {create} from 'zustand';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import type {User, AuthTokens} from '../core/types/models';
 import {Config} from '../core/constants/config';
 

@@ -1,5 +1,15 @@
-import {useEffect, useState} from 'react';
+import {useEffect, useState, useCallback} from 'react';
 import {api} from '../api/client';
+import {useRealtimeStore} from '../store/realtimeStore';
+import {PageHeader, Button, Badge} from '../components/ui';
+
+const statusTone: Record<string, string> = {
+  active: 'green',
+  pending: 'blue',
+  rejected: 'yellow',
+  hidden: 'yellow',
+  deleted: 'red',
+};
 
 export function PostsPage() {
   const [posts, setPosts] = useState<any[]>([]);
@@ -7,32 +17,63 @@ export function PostsPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
+  const eventVersion = useRealtimeStore(s => s.eventVersion);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const params: Record<string, string> = {page: String(page), pageSize: '20'};
-      if (status) params.status = status;
-      const r = await api.getPosts(params);
-      setPosts(r.data); setMeta(r.meta);
-    } catch (e) { console.error(e); }
-    setLoading(false);
-  };
+  const load = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true);
+      try {
+        const params: Record<string, string> = {
+          page: String(page),
+          pageSize: '20',
+        };
+        if (status) params.status = status;
+        const r = await api.getPosts(params);
+        setPosts(r.data);
+        setMeta(r.meta);
+      } catch (e) {
+        console.error(e);
+      }
+      if (!silent) setLoading(false);
+    },
+    [page, status],
+  );
 
-  useEffect(() => { load(); }, [page, status]);
+  useEffect(() => {
+    load();
+  }, [page, status, load]);
+
+  // Live: a new post submitted anywhere refreshes this list instantly.
+  useEffect(() => {
+    if (eventVersion > 0) load(true);
+  }, [eventVersion]);
 
   const handleStatus = async (id: string, s: string) => {
     if (!confirm(`Set post status to ${s}?`)) return;
-    try { await api.updatePostStatus(id, s); load(); } catch (e: any) { alert(e.message); }
+    try {
+      await api.updatePostStatus(id, s);
+      load();
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Posts</h1>
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="p-4 flex gap-3 border-b border-gray-200">
-          <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}
-            className="px-3 py-2 border rounded-lg text-sm">
+    <div className="animate-fade-up">
+      <PageHeader
+        title="Posts"
+        subtitle={meta ? `${meta.total} total posts` : undefined}
+      />
+
+      <div className="glass-card overflow-hidden">
+        <div className="flex gap-3 border-b border-white/20 p-4 dark:border-white/10">
+          <select
+            value={status}
+            onChange={e => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+            className="glass-input w-auto">
             <option value="">All Status</option>
             <option value="pending">Pending</option>
             <option value="active">Active</option>
@@ -41,60 +82,146 @@ export function PostsPage() {
             <option value="deleted">Deleted</option>
           </select>
         </div>
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Author</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Content</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Likes</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">Loading...</td></tr> :
-              posts.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">No posts</td></tr> :
-              posts.map(p => (
-                <tr key={p.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm">{p.authorName} <span className="text-gray-400">@{p.authorUsername}</span></td>
-                  <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">
-                    {p.imageUrl && <img src={p.imageUrl} alt="Post attachment" className="w-16 h-16 object-cover rounded mb-1" />}
-                    <span className="block max-w-xs truncate">{p.caption || '—'}</span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">{p.likeCount}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                      p.status === 'active' ? 'bg-green-100 text-green-700' :
-                      p.status === 'pending' ? 'bg-blue-100 text-blue-700' :
-                      p.status === 'rejected' ? 'bg-orange-100 text-orange-700' :
-                      p.status === 'hidden' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>{p.status}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right flex gap-1 justify-end">
-                    {p.status === 'pending' && <>
-                      <button onClick={() => handleStatus(p.id, 'active')} className="px-2 py-1 text-xs bg-green-50 text-green-700 rounded">Approve</button>
-                      <button onClick={() => handleStatus(p.id, 'rejected')} className="px-2 py-1 text-xs bg-orange-50 text-orange-700 rounded">Reject</button>
-                    </>}
-                    {p.status === 'active' && <button onClick={() => handleStatus(p.id, 'hidden')} className="px-2 py-1 text-xs bg-yellow-50 text-yellow-700 rounded">Hide</button>}
-                    {p.status === 'hidden' && <button onClick={() => handleStatus(p.id, 'active')} className="px-2 py-1 text-xs bg-green-50 text-green-700 rounded">Restore</button>}
-                    <button onClick={() => handleStatus(p.id, 'deleted')} className="px-2 py-1 text-xs bg-red-50 text-red-700 rounded">Delete</button>
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="border-b border-white/20 bg-white/20 dark:border-white/10 dark:bg-white/5">
+              <tr>
+                {['Author', 'Content', 'Likes', 'Status', ''].map((h, i) => (
+                  <th
+                    key={i}
+                    className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 ${i === 4 ? 'text-right' : 'text-left'}`}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
+                    Loading…
                   </td>
                 </tr>
-              ))}
-          </tbody>
-        </table>
+              ) : posts.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-slate-400">
+                    No posts
+                  </td>
+                </tr>
+              ) : (
+                posts.map(p => (
+                  <tr
+                    key={p.id}
+                    className="transition hover:bg-white/30 dark:hover:bg-white/5">
+                    <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-200">
+                      {p.authorName}{' '}
+                      <span className="text-slate-400">@{p.authorUsername}</span>
+                    </td>
+                    <td className="max-w-xs px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                      {p.imageUrl && (
+                        <img
+                          src={p.imageUrl}
+                          alt=""
+                          className="mb-1 h-16 w-16 rounded-lg object-cover"
+                        />
+                      )}
+                      <span className="block max-w-xs truncate">
+                        {p.caption || '—'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                      {p.likeCount}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge tone={statusTone[p.status] || 'gray'}>
+                        {p.status}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-1.5">
+                        {p.status === 'pending' && (
+                          <>
+                            <ActionBtn tone="green" onClick={() => handleStatus(p.id, 'active')}>
+                              Approve
+                            </ActionBtn>
+                            <ActionBtn tone="yellow" onClick={() => handleStatus(p.id, 'rejected')}>
+                              Reject
+                            </ActionBtn>
+                          </>
+                        )}
+                        {p.status === 'active' && (
+                          <ActionBtn tone="yellow" onClick={() => handleStatus(p.id, 'hidden')}>
+                            Hide
+                          </ActionBtn>
+                        )}
+                        {p.status === 'hidden' && (
+                          <ActionBtn tone="green" onClick={() => handleStatus(p.id, 'active')}>
+                            Restore
+                          </ActionBtn>
+                        )}
+                        <ActionBtn tone="red" onClick={() => handleStatus(p.id, 'deleted')}>
+                          Delete
+                        </ActionBtn>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
         {meta && (
-          <div className="p-4 flex items-center justify-between border-t border-gray-200">
-            <span className="text-sm text-gray-500">{meta.total} total</span>
-            <div className="flex gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50">Prev</button>
-              <span className="px-3 py-1 text-sm">Page {page}</span>
-              <button onClick={() => setPage(p => p + 1)} disabled={!meta.hasMore} className="px-3 py-1 text-sm border rounded-lg disabled:opacity-50">Next</button>
+          <div className="flex items-center justify-between border-t border-white/20 p-4 dark:border-white/10">
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              {meta.total} total
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="soft"
+                className="px-3 py-1"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}>
+                Prev
+              </Button>
+              <span className="text-sm text-slate-500">Page {page}</span>
+              <Button
+                variant="soft"
+                className="px-3 py-1"
+                onClick={() => setPage(p => p + 1)}
+                disabled={!meta.hasMore}>
+                Next
+              </Button>
             </div>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function ActionBtn({
+  tone,
+  onClick,
+  children,
+}: {
+  tone: 'green' | 'yellow' | 'red';
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const tones: Record<string, string> = {
+    green:
+      'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 dark:text-emerald-300',
+    yellow:
+      'bg-amber-500/15 text-amber-600 hover:bg-amber-500/25 dark:text-amber-300',
+    red: 'bg-rose-500/15 text-rose-600 hover:bg-rose-500/25 dark:text-rose-300',
+  };
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${tones[tone]}`}>
+      {children}
+    </button>
   );
 }

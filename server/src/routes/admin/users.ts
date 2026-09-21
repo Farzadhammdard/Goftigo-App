@@ -598,12 +598,17 @@ router.delete(
           runStatement(db, 'DELETE FROM nearby_sessions WHERE user_id = ?', [
             req.params.id,
           ]);
+        else if (table === 'otp_codes')
+          runStatement(db, 'DELETE FROM otp_codes WHERE phone_number = ?', [
+            user.phone_number,
+          ]);
         else if (
           table === 'user_devices' ||
           table === 'refresh_tokens' ||
-          table === 'otp_codes' ||
           table === 'user_settings' ||
-          table === 'message_reactions'
+          table === 'message_reactions' ||
+          table === 'post_likes' ||
+          table === 'post_saves'
         )
           runStatement(db, `DELETE FROM ${table} WHERE user_id = ?`, [
             req.params.id,

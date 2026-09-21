@@ -1,12 +1,12 @@
 import {Router, Response} from 'express';
-import {getDb} from '../../db/connection';
+import {getDb, saveDb} from '../../db/connection';
 import {queryOne, queryAll, runStatement} from '../../db/helpers';
 import {generateId, now} from '../../utils/auth';
 import {
   mobileAuthMiddleware,
   MobileAuthRequest,
 } from '../../middleware/mobileAuth';
-import {broadcastToConversation} from '../../websocket';
+import {broadcastToConversation, notifyAdmins} from '../../websocket';
 
 const router = Router();
 
@@ -137,6 +137,38 @@ router.post(
         },
         userId,
       );
+
+      // If this is a support conversation, alert the admin panel globally so a
+      // notification shows even when the admin is not on the chat page.
+      const isSupportConv = queryOne(
+        db,
+        `SELECT cp.conversation_id FROM conversation_participants cp
+           INNER JOIN users u ON u.id = cp.user_id
+          WHERE cp.conversation_id = ? AND u.username = 'goftegoo_admin' LIMIT 1`,
+        [conversationId],
+      );
+      if (isSupportConv && (message as any)?.sender_username !== 'goftegoo_admin') {
+        const preview =
+          type === 'text'
+            ? String(content || '').slice(0, 80)
+            : `Sent a ${type}`;
+        notifyAdmins({
+          kind: 'message.new',
+          title: 'New support message',
+          body: `${(message as any)?.sender_name || 'A user'}: ${preview}`,
+          icon: '💬',
+          level: 'info',
+          link: '/chat',
+          data: {
+            conversationId,
+            messageId: msgId,
+            senderId: userId,
+            senderName: (message as any)?.sender_name,
+            type,
+            preview,
+          },
+        });
+      }
 
       res.json({success: true, data: {message}});
     } catch (error) {
@@ -333,9 +365,11 @@ router.post(
         return;
       }
 
-      const msg = queryOne(db, 'SELECT id FROM messages WHERE id = ?', [
-        req.params.id,
-      ]);
+      const msg = queryOne(
+        db,
+        'SELECT id, conversation_id FROM messages WHERE id = ?',
+        [req.params.id],
+      );
       if (!msg) {
         res.status(404).json({
           success: false,
@@ -351,21 +385,43 @@ router.post(
         [req.params.id, userId, emoji],
       );
 
+      let action: 'added' | 'removed';
       if (existing) {
         runStatement(
           db,
           'DELETE FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?',
           [req.params.id, userId, emoji],
         );
-        res.json({success: true, data: {action: 'removed', emoji}});
+        action = 'removed';
       } else {
         runStatement(
           db,
           'INSERT INTO message_reactions (message_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?)',
           [req.params.id, userId, emoji, now()],
         );
-        res.json({success: true, data: {action: 'added', emoji}});
+        action = 'added';
       }
+      saveDb();
+
+      const reactions = queryAll(
+        db,
+        'SELECT user_id, emoji FROM message_reactions WHERE message_id = ?',
+        [req.params.id],
+      );
+
+      // Broadcast the updated reaction set to every participant so all devices
+      // stay in sync without a refresh.
+      broadcastToConversation(msg.conversation_id, {
+        type: 'message_reaction',
+        conversationId: msg.conversation_id,
+        messageId: req.params.id,
+        reactions,
+        actorId: userId,
+        emoji,
+        action,
+      });
+
+      res.json({success: true, data: {action, emoji, reactions}});
     } catch (error) {
       console.error('Reaction error:', error);
       res.status(500).json({

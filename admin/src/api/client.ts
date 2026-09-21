@@ -230,6 +230,16 @@ class ApiClient {
     });
   }
 
+  // OTP
+  getOtps(params?: Record<string, string>) {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return this.request<{ data: any[]; meta: any }>(`/otp${qs}`);
+  }
+
+  cleanupOtps() {
+    return this.request<any>('/otp/cleanup', { method: 'DELETE' });
+  }
+
   // Chat / Conversations
   getConversations(params?: Record<string, string>) {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
