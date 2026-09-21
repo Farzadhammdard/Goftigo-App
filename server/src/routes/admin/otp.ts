@@ -120,4 +120,19 @@ router.delete('/cleanup', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// DELETE /api/admin/otp/:id — delete single OTP
+router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const db = await getDb();
+    const id = req.params.id;
+    db.run('DELETE FROM otp_codes WHERE id = ?', [id]);
+    const { saveDb } = await import('../../db/connection');
+    saveDb();
+    res.json({ success: true, data: { message: 'OTP deleted' } });
+  } catch (error) {
+    console.error('OTP delete error:', error);
+    res.status(500).json({ success: false, error: { code: 'INTERNAL', message: 'Failed to delete OTP' } });
+  }
+});
+
 export default router;

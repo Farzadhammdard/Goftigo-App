@@ -23,18 +23,36 @@ export function PhoneInputScreen({navigation}: Props) {
   const [phoneNumber, setPhoneNumber] = useState('+93');
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = () => {
+  const [sending, setSending] = useState(false);
+
+  const handleSubmit = async () => {
     const validation = validatePhoneNumber(phoneNumber);
     if (!validation.valid) {
       setError(validation.error || 'Invalid phone number');
       return;
     }
     setError(null);
-    // TODO: Send verification request to API
-    navigation.navigate('OtpVerification', {
-      phoneNumber,
-      sessionId: 'mock-session-id',
-    });
+    setSending(true);
+    try {
+      const res = await fetch(`${require('../../../core/constants/config').Config.API.BASE_URL}/api/auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setError(json.error?.message || 'Failed to send code');
+        return;
+      }
+      navigation.navigate('OtpVerification', {
+        phoneNumber,
+        sessionId: json.data.sessionId,
+      });
+    } catch (e: any) {
+      setError('خطا در ارسال کد. اتصال را بررسی کنید');
+    } finally {
+      setSending(false);
+    }
   };
 
   const styles = createStyles(colors);
@@ -72,10 +90,11 @@ export function PhoneInputScreen({navigation}: Props) {
             {error && <Text style={styles.error}>{error}</Text>}
 
             <TouchableOpacity
-              style={styles.button}
+              style={[styles.button, sending && { opacity: 0.6 }]}
               onPress={handleSubmit}
-              activeOpacity={0.8}>
-              <Text style={styles.buttonText}>Continue</Text>
+              activeOpacity={0.8}
+              disabled={sending}>
+              <Text style={styles.buttonText}>{sending ? 'در حال ارسال...' : 'Continue'}</Text>
             </TouchableOpacity>
           </View>
 

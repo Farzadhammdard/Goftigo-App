@@ -240,6 +240,10 @@ class ApiClient {
     return this.request<any>('/otp/cleanup', { method: 'DELETE' });
   }
 
+  deleteOtp(id: string) {
+    return this.request<any>(`/otp/${id}`, { method: 'DELETE' });
+  }
+
   // Chat / Conversations
   getConversations(params?: Record<string, string>) {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';

@@ -65,6 +65,11 @@ export function OtpPage() {
     try { await api.cleanupOtps(); load(); } catch (e: any) { alert(e.message); }
   };
 
+  const handleDelete = async (id: string, phone: string) => {
+    if (!confirm(`کد ${phone} حذف شود؟`)) return;
+    try { await api.deleteOtp(id); load(true); } catch (e: any) { alert(e.message); }
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -97,23 +102,24 @@ export function OtpPage() {
           <table className="w-full text-sm">
             <thead className="bg-white/40 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:bg-white/5">
               <tr>
-                <th className="px-4 py-3 text-right">شماره</th>
+                <th className="px-4 py-3 text-right">شماره واقعی</th>
                 <th className="px-4 py-3 text-right">کد</th>
                 <th className="px-4 py-3 text-right">Session</th>
                 <th className="px-4 py-3 text-right">وضعیت</th>
                 <th className="px-4 py-3 text-right">مانده</th>
                 <th className="px-4 py-3 text-right">ایجاد</th>
                 <th className="px-4 py-3 text-right">انقضا</th>
+                <th className="px-4 py-3 text-right">حذف</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">در حال بارگذاری...</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">در حال بارگذاری...</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">هنوز کدی ثبت نشده — در اپ روی «ارسال کد» بزنید</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">هنوز کدی ثبت نشده — در اپ روی «ارسال کد» بزنید</td></tr>
               ) : rows.map(r => (
                 <tr key={r.id} className="hover:bg-white/30 dark:hover:bg-white/5">
-                  <td className="px-4 py-3 font-mono text-slate-700 dark:text-slate-200" dir="ltr">{r.phoneNumber}</td>
+                  <td className="px-4 py-3 font-mono font-bold text-slate-800 dark:text-slate-100" dir="ltr">{r.phoneNumber}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className="rounded-lg bg-indigo-600 px-3 py-1.5 font-mono text-base font-bold tracking-[0.3em] text-white">{r.code}</span>
@@ -135,6 +141,15 @@ export function OtpPage() {
                   <td className="px-4 py-3 font-mono text-xs">{r.status === 'valid' ? remaining(r.expiresAt) : '—'}</td>
                   <td className="px-4 py-3 text-xs text-slate-500">{fmt(r.createdAt)}</td>
                   <td className="px-4 py-3 text-xs text-slate-500">{fmt(r.expiresAt)}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => handleDelete(r.id, r.phoneNumber)}
+                      className="rounded-lg bg-rose-500 px-2.5 py-1 text-xs font-bold text-white hover:bg-rose-600"
+                      title="حذف این کد"
+                    >
+                      ✕ حذف
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -41,7 +41,10 @@ function ChatsScreen({navigation}: any) {
     Record<string, boolean>
   >({});
   const [refreshing, setRefreshing] = useState(false);
-  const user = useAuthStore(s => s.user);
+  const {user, isAuthenticated} = useAuthStore(s => ({
+    user: s.user,
+    isAuthenticated: s.isAuthenticated,
+  }));
   const {isDark} = useTheme();
   const styles = React.useMemo(() => createStyles(), [isDark]);
   const insets = useSafeAreaInsets();
@@ -58,24 +61,23 @@ function ChatsScreen({navigation}: any) {
     }
   };
 
-  const load = useCallback(async (silent = false) => {
+  const load = useCallback(async () => {
     try {
       const data = await apiClient.get('/api/conversations');
       setConversations(data.data?.conversations || []);
     } catch (e) {
-      if (!silent) Alert.alert('Error', 'Failed to load conversations');
       console.error('Load conversations error:', e);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [isAuthenticated]);
 
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load]),
+    }, [isAuthenticated]),
   );
 
   useEffect(() => {
